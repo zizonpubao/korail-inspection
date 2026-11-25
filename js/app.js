@@ -319,7 +319,7 @@
     else if (gem) {
       const cls = String(gem.verdict).includes('의심') ? 'gem-bad' : gem.verdict === '정상' ? 'gem-ok' : 'gem-na';
       box.append(h('p', { class: 'gem-line' }, h('span', { class: 'gem-v ' + cls, text: 'Gemini: ' + gemText(gem) }), h('span', { text: gem.reason ? ' · ' + gem.reason : '' })));
-    } else if (d.gemErr) box.append(h('p', { class: 'gem-line gem-na gem-err', text: 'Gemini 판단을 받지 못했습니다' }));
+    } else if (d.gemErr) box.append(h('p', { class: 'gem-line gem-na gem-err', text: 'Gemini 판단을 받지 못했습니다' + (typeof d.gemErr === 'string' ? ' (' + d.gemErr + ')' : '') }));
     box.append(h('p', { class: 'ai-note', text: 'AI 판정은 참고용이며 최종 판정은 점검자가 합니다' }));
     const sus = (d.ai && d.ai.top && String(d.ai.top).includes('의심')) || (gem && String(gem.verdict).includes('의심'));
     if (sus && d.status !== 'defect') {
@@ -471,7 +471,7 @@
       if (!g || !g.verdict) throw new Error('empty');
       d.ai = Object.assign({}, d.ai || {}, { gemini: { verdict: String(g.verdict), confidence: Number(g.confidence) || 0, reason: String(g.reason || '') } });
       scheduleDraft();
-    } catch (e) { if (d.reqId !== id) return; d.gemErr = true; }
+    } catch (e) { if (d.reqId !== id) return; d.gemErr = (e && e.message) ? String(e.message).slice(0, 60) : true; }
     d.gemBusy = false; syncRow(key);
   }
 
