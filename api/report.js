@@ -13,8 +13,11 @@ module.exports = async (req, res) => {
     res.setHeader('Allow', 'POST, OPTIONS');
     return send(res, 405, { error: 'method_not_allowed' });
   }
-  const url = process.env.SUPABASE_URL;
-  const anon = process.env.SUPABASE_ANON_KEY;
+  // Vercel에 어떤 이름으로 등록해도 동작하도록 여러 이름을 받는다
+  const env = process.env;
+  const url = env.SUPABASE_URL || env.NEXT_PUBLIC_SUPABASE_URL;
+  const anon = env.SUPABASE_ANON_KEY || env.SUPABASE_PUBLISHABLE_KEY
+    || env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   if (!url || !anon) return send(res, 500, { error: 'server_not_configured' });
 
   const m = /^Bearer\s+(\S+)$/i.exec(req.headers['authorization'] || '');
