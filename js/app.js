@@ -718,7 +718,7 @@
           margin: [10, 10, 10, 10], filename: name, image: { type: 'jpeg', quality: 0.95 },
           html2canvas: { scale: 2, useCORS: true, backgroundColor: '#ffffff', scrollX: 0, scrollY: 0 },
           jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
-          pagebreak: { mode: ['css', 'legacy'], avoid: ['tr', '.sign'] }
+          pagebreak: { mode: ['css', 'legacy'], avoid: ['tr', '.sign', '.j-diagram', '.dg-legend'] }
         }).from(journal).save();
         stage.remove();
         return 'pdf';
@@ -741,7 +741,7 @@
         margin: [10, 10, 10, 10], image: { type: 'jpeg', quality: 0.95 },
         html2canvas: { scale: 2, useCORS: true, backgroundColor: '#ffffff', scrollX: 0, scrollY: 0 },
         jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
-        pagebreak: { mode: ['css', 'legacy'], avoid: ['tr', '.sign'] }
+        pagebreak: { mode: ['css', 'legacy'], avoid: ['tr', '.sign', '.j-diagram', '.dg-legend'] }
       }).from(journal).outputPdf('datauristring');
       return String(uri).replace(/^data:[^,]*,/, '');
     } finally { if (stage) stage.remove(); }

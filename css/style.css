@@ -420,3 +420,5 @@ button.dg-row:hover { background: var(--tint); }
 .journal .j-diagram .dg-dot { margin-top: 0; width: 7px; height: 7px; }
 .journal .j-diagram .dg-note { font-size: 10px; }
 .journal .j-ai { word-break: break-all; overflow-wrap: anywhere; }
+/* PDF: 도식·범례가 페이지 경계에서 잘리지 않게 */
+.journal .j-diagram, .journal .j-diagram img, .journal .dg-legend { page-break-inside: avoid; break-inside: avoid; }
