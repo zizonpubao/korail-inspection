@@ -91,8 +91,10 @@
     el('line', { x1: 748, y1: 124, x2: 748, y2: 138, stroke: hit.coupler ? BAD : LINE, 'stroke-width': 1 }, g);
   }
 
+  let mode3d = false;
   function render(container, items, opts) {
     opts = opts || {};
+    if (window.View3D) window.View3D.destroy(container.querySelector('.dg-3d') || container);
     const click = !opts.static && typeof opts.onClick === 'function' ? opts.onClick : null;
     container.textContent = '';
     const defects = (items || []).filter((i) => i && i.status === 'defect')
@@ -127,7 +129,18 @@
         }
       });
     });
-    wrap.appendChild(svg);
+    let host3d = null;
+    if (!opts.static) {
+      const tg = htm('div', 'dg-toggle');
+      const b2 = htm('button', 'dg-tbtn' + (mode3d ? '' : ' on'), '2D'), b3 = htm('button', 'dg-tbtn' + (mode3d ? ' on' : ''), '3D');
+      b2.type = 'button'; b3.type = 'button';
+      b2.addEventListener('click', () => { if (mode3d) { mode3d = false; render(container, items, opts); } });
+      b3.addEventListener('click', () => { if (!mode3d) { mode3d = true; render(container, items, opts); } });
+      tg.append(b2, b3);
+      wrap.appendChild(tg);
+      if (mode3d && window.View3D) { host3d = htm('div', 'dg-3d'); wrap.appendChild(host3d); }
+    }
+    if (!host3d) wrap.appendChild(svg);
     wrap.appendChild(htm('p', 'dg-note', '부위는 분야 기준 대략 위치입니다. (시연용 도식)'));
 
     if (!defects.length) {
@@ -150,7 +163,14 @@
       wrap.appendChild(ul);
     }
     container.appendChild(wrap);
+    if (host3d) {
+      window.View3D.render(host3d, items, { onClick: click }).catch(() => {
+        mode3d = false; render(container, items, opts);
+        const m = htm('p', 'dg-none', '3D를 불러오지 못했습니다');
+        const w = container.firstChild; if (w) w.insertBefore(m, w.children[1] || null);
+      });
+    }
   }
 
-  window.Diagram = { render: render };
+  window.Diagram = { render: render, zoneOf: zoneOf };
 })();

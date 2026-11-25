@@ -393,3 +393,13 @@ button.dg-row:hover { background: var(--tint); }
 .dg-static .dg-legend { font-size: 12px; }
 .dg-static .dg-row { padding: 2px; }
 .j-diagram { margin: 6px 0 10px; }
+
+/* 3D 보기 */
+.dg-toggle { display: flex; margin: 0 0 6px; }
+.dg-tbtn { min-width: 52px; min-height: 44px; font: inherit; font-size: 14px; background: #fff; color: var(--text); border: 1px solid var(--line); cursor: pointer; }
+.dg-tbtn + .dg-tbtn { border-left: 0; }
+.dg-tbtn.on { background: #005BAC; color: #fff; border-color: #005BAC; }
+.v3d { position: relative; width: 100%; height: 260px; overflow: hidden; border: 1px solid var(--line-soft); background: #fff; }
+.v3d-canvas { display: block; width: 100%; height: 100%; touch-action: pan-y; cursor: grab; }
+.v3d-label { position: absolute; transform: translate(-50%, -50%); min-width: 22px; height: 22px; line-height: 22px; padding: 0 3px; text-align: center; color: #fff; font-size: 13px; font-weight: 700; border-radius: 11px; border: 1px solid #fff; cursor: pointer; }
+@media (max-width: 600px) { .v3d { height: 220px; } }
