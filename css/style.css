@@ -376,3 +376,20 @@ table.grid td.num { text-align: right; font-variant-numeric: tabular-nums; }
 .gem-v.gem-bad { color: #C62828; }
 .gem-v.gem-ok { color: #2E7D32; }
 .gem-v.gem-na { color: var(--sub); }
+
+/* 불량 위치 도식 */
+.dg-panel { background: #fff; border: 1px solid var(--line); padding: 10px 12px; margin: 12px 0; }
+.dg-panel > summary { cursor: pointer; font-weight: 600; min-height: 32px; display: flex; align-items: center; }
+.dg-panel .sub-title { margin: 0 0 6px; }
+.dg-svg { display: block; width: 100%; height: auto; max-width: 100%; }
+.dg-note { margin: 4px 0 0; font-size: 12px; color: var(--gray); }
+.dg-none { margin: 8px 0 0; color: var(--gray); font-size: 14px; }
+.dg-legend { list-style: none; margin: 8px 0 0; padding: 0; font-size: 14px; }
+.dg-row { display: flex; align-items: flex-start; gap: 8px; width: 100%; text-align: left; font: inherit; color: var(--text); background: none; border: 0; border-bottom: 1px solid var(--line-soft); padding: 6px 2px; }
+button.dg-row { cursor: pointer; min-height: 40px; }
+button.dg-row:hover { background: var(--tint); }
+.dg-dot { flex: none; width: 8px; height: 8px; border-radius: 50%; margin-top: 7px; }
+.dg-static .dg-svg { max-width: 560px; }
+.dg-static .dg-legend { font-size: 12px; }
+.dg-static .dg-row { padding: 2px; }
+.j-diagram { margin: 6px 0 10px; }

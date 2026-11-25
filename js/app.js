@@ -349,7 +349,34 @@
     updateProgress(); scheduleDraft();
   }
 
+  // 불량 위치 도식 (Diagram 없으면 패널 숨김)
+  function diagPanel(box, items, title, opts) {
+    if (!box) return;
+    if (!window.Diagram) { box.hidden = true; return; }
+    box.hidden = false; box.textContent = '';
+    const body = h('div');
+    box.append(h('h2', { class: 'sub-title', text: title }), body);
+    window.Diagram.render(body, items, opts || {});
+  }
+  function scrollToItem(key) {
+    const r = rows[key];
+    if (!r || !r.el) return;
+    const sec = r.el.closest('.sec');
+    if (sec && isMobile()) { const ref = Object.values(secRefs).find((x) => x.el === sec); if (ref) setSecOpen(ref, true); }
+    r.el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+  function updateCkDiagram() {
+    const box = $('#ck-diagram');
+    if (!box) return;
+    if (!window.Diagram) { box.hidden = true; return; }
+    const defs = visibleItems().filter((it) => { const d = S.data[it.key]; return d && d.status === 'defect'; })
+      .map((it) => ({ key: it.key, section: it.sectionName, label: it.label, status: 'defect', urgency: S.data[it.key].urgency }));
+    box.hidden = false;
+    $('#ck-diagram > summary').textContent = '불량 위치 보기' + (defs.length ? ' (' + defs.length + '건)' : '');
+    if (box.open) window.Diagram.render($('#ck-diagram-body'), defs, { onClick: scrollToItem });
+  }
   function updateProgress() {
+    updateCkDiagram();
     const s = stats();
     const pc = (n) => (s.total ? n / s.total * 100 : 0) + '%';
     $('#pg-ok').style.width = pc(s.ok); $('#pg-bad').style.width = pc(s.defect); $('#pg-na').style.width = pc(s.na);
@@ -587,7 +614,7 @@
   }
 
   // ---------- 일지(PDF/인쇄/미리보기) ----------
-  function buildJournal(rec, photos) {
+  function buildJournal(rec, photos, noDiagram) {
     photos = photos || {};
     const R = rec.results, s = R.summary;
     const root = h('div', { class: 'journal' });
@@ -614,6 +641,11 @@
       h('thead', null, h('tr', null, h('th', { text: '항목' }), h('th', { class: 'c', text: '결과' }), h('th', { class: 'c', text: '측정값' }), h('th', { class: 'c', text: '기준' }))), tb));
     root.append(h('h2', { text: '불량 항목' }));
     const ds = defectsOf(rec);
+    if (!noDiagram && window.Diagram && ds.length) {
+      const dbox = h('div', { class: 'j-diagram' });
+      window.Diagram.render(dbox, R.items, { static: true });
+      root.append(dbox);
+    }
     if (!ds.length) root.append(h('p', { text: '불량 항목 없음' }));
     else {
       const dtb = h('tbody');
@@ -765,6 +797,7 @@
     const L = S.last;
     $('#res-text').textContent = actionText(L.rec);
     const sm = L.rec.results.summary, okN = L.rec.results.items.filter((i) => i.status === 'ok').length;
+    diagPanel($('#res-diagram'), L.rec.results.items, '불량 위치');
     $('#rc-total').textContent = sm.total; $('#rc-ok').textContent = okN; $('#rc-bad').textContent = sm.defect; $('#rc-urg').textContent = sm.urgent;
     $('#res-ai-tag').hidden = true;
     $('#btn-retry-save').hidden = true;
@@ -929,7 +962,10 @@
     if (location.hash !== '#detail/' + encodeURIComponent(id) && location.hash !== '#detail/' + id) return;
     curDetail = { rec, photos };
     body.textContent = '';
-    body.append(h('div', { class: 'journal-wrap' }, buildJournal(rec, photos)));
+    const dp = h('div', { class: 'dg-panel', hidden: true });
+    body.append(dp);
+    diagPanel(dp, rec.results.items, '불량 위치');
+    body.append(h('div', { class: 'journal-wrap' }, buildJournal(rec, photos, true)));
     if (rec.ai_report) { /* 일지 안에 포함 */ }
     const me = S.user && S.user.id;
     $('#d-del').hidden = !(me && rec.user_id === me);
@@ -1032,6 +1068,7 @@
   }
 
   // ---------- 시작 ----------
+  document.addEventListener('DOMContentLoaded', () => { const d = $('#ck-diagram'); if (d) d.addEventListener('toggle', updateCkDiagram); });
   async function boot() {
     $('#foot-notice').textContent = IT.notice;
     try { await DB.init(); } catch (e) { toast('저장소 초기화 실패: ' + e.message, 'error'); }
