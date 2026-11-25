@@ -83,6 +83,7 @@
     info: { date: todayStr(), trainNo: '', vehicle: IT.vehicles[0], type: IT.types[0] },
     data: {},     // key -> { status, value, memo, urgency, ai, photo, panel }
     aiOn: false,
+    view: '',
     last: null,   // 완료 결과
     busy: false
   };
@@ -99,15 +100,17 @@
     return Object.values(S.data).some((d) => d.status || d.value !== '' || d.memo || d.photo);
   }
   function stats() {
-    let total = 0, done = 0, defect = 0, urgent = 0;
+    let total = 0, done = 0, defect = 0, urgent = 0, ok = 0, na = 0;
     visibleItems().forEach((it) => {
       const d = S.data[it.key]; total++;
       if (d && d.status) {
         done++;
-        if (d.status === 'defect') { defect++; if (d.urgency === 'immediate') urgent++; }
+        if (d.status === 'ok') ok++;
+        else if (d.status === 'na') na++;
+        else if (d.status === 'defect') { defect++; if (d.urgency === 'immediate') urgent++; }
       }
     });
-    return { total, done, defect, urgent, unchecked: total - done };
+    return { total, done, defect, urgent, ok, na, unchecked: total - done };
   }
 
   // ---------- 임시 저장 ----------
@@ -120,7 +123,9 @@
         const d = S.data[k];
         if (d.status || d.value !== '' || d.memo) items[k] = { status: d.status, value: d.value, memo: d.memo, urgency: d.urgency, ai: d.ai };
       }
-      Promise.resolve(DB.saveDraft({ info: S.info, items })).catch(() => {});
+      Promise.resolve(DB.saveDraft({ info: S.info, items })).then(() => {
+        const el = $('#save-state'); if (el) { const n = new Date(); el.textContent = '임시저장됨 ' + p2(n.getHours()) + ':' + p2(n.getMinutes()); }
+      }).catch(() => {});
     } catch (e) { /* 무시 */ }
   }
   async function restoreDraft() {
@@ -141,27 +146,67 @@
   const rows = {};
   const secRefs = {};
 
+  const isMobile = () => window.matchMedia('(max-width: 600px)').matches;
+  let secObs = null;
+  function setSecOpen(ref, open) {
+    ref.el.classList.toggle('collapsed', !open);
+    ref.toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+  }
   function renderChecklist() {
     const list = $('#checklist'); list.textContent = '';
     const nav = $('#section-nav'); nav.textContent = '';
     for (const k in rows) delete rows[k];
     for (const k in secRefs) delete secRefs[k];
+    if (secObs) { secObs.disconnect(); secObs = null; }
     visibleSections().forEach((sec) => {
       const hasCheck = sec.items.some((i) => i.kind === 'check');
       const cnt = h('span', { class: 'sec-count' });
-      const el = h('section', { class: 'sec', id: 'sec-' + sec.id },
-        h('div', { class: 'sec-head' },
-          h('h2', { text: sec.name }), cnt,
-          hasCheck ? h('button', { type: 'button', class: 'btn sm', onclick: () => allOk(sec), text: '모두 양호' }) : null),
-        sec.items.map(buildRow));
+      const bad = h('span', { class: 'sec-bad' });
+      const body = h('div', { class: 'sec-body' }, sec.items.map(buildRow));
+      const head = h('div', { class: 'sec-head', role: 'button', tabindex: '0', 'aria-expanded': 'true' },
+        h('h2', { text: sec.name }), bad, cnt,
+        hasCheck ? h('button', { type: 'button', class: 'btn sm', onclick: (e) => { e.stopPropagation(); allOk(sec); }, text: '모두 양호' }) : null,
+        h('span', { class: 'chev', 'aria-hidden': 'true' }));
+      const el = h('section', { class: 'sec', id: 'sec-' + sec.id }, head, body);
       list.append(el);
       const navCnt = h('span', { class: 'cnt' });
-      nav.append(h('button', { type: 'button', class: 'nav-btn', onclick: () => el.scrollIntoView({ behavior: 'smooth', block: 'start' }) },
-        h('span', { text: sec.name }), navCnt));
-      secRefs[sec.id] = { sec, cnt, navCnt, navBtn: nav.lastChild };
+      const navBad = h('span', { class: 'nbad' });
+      const navBtn = h('button', { type: 'button', class: 'nav-btn',
+        onclick: () => { if (isMobile()) setSecOpen(secRefs[sec.id], true); el.scrollIntoView({ behavior: 'smooth', block: 'start' }); } },
+        h('span', { class: 'nname', text: sec.name }), h('span', { class: 'nright' }, navBad, navCnt));
+      nav.append(navBtn);
+      const ref = { sec, el, cnt, bad, navCnt, navBad, navBtn, toggle: head };
+      secRefs[sec.id] = ref;
+      const toggle = () => { if (isMobile()) setSecOpen(ref, el.classList.contains('collapsed')); };
+      head.addEventListener('click', toggle);
+      head.addEventListener('keydown', (e) => { if ((e.key === 'Enter' || e.key === ' ') && e.target === head) { e.preventDefault(); toggle(); } });
     });
     visibleItems().forEach((it) => syncRow(it.key));
     updateProgress();
+    // 모바일 아코디언: 미완료 분야 중 첫 번째만 펼침
+    let first = true;
+    for (const id in secRefs) {
+      const ref = secRefs[id];
+      const incomplete = ref.sec.items.some((it) => !(S.data[it.key] && S.data[it.key].status));
+      setSecOpen(ref, incomplete && first);
+      if (incomplete) first = false;
+    }
+    observeSections();
+  }
+  // 현재 보고 있는 분야 표시
+  function observeSections() {
+    const ids = Object.keys(secRefs);
+    if (!ids.length) return;
+    const setCur = (id) => ids.forEach((k) => secRefs[k].navBtn.classList.toggle('current', k === id));
+    setCur(ids[0]);
+    if (!('IntersectionObserver' in window)) return;
+    const vis = new Set();
+    secObs = new IntersectionObserver((ents) => {
+      ents.forEach((en) => { const id = en.target.id.slice(4); if (en.isIntersecting) vis.add(id); else vis.delete(id); });
+      const cur = ids.find((k) => vis.has(k));
+      if (cur) setCur(cur);
+    }, { rootMargin: '-110px 0px -55% 0px', threshold: 0 });
+    ids.forEach((k) => secObs.observe(secRefs[k].el));
   }
 
   // TM 준비 후 사진 버튼만 표시 (전체 재렌더로 포커스가 풀리지 않게)
@@ -176,45 +221,48 @@
     let ctrl;
     if (it.kind === 'check') {
       r.btns = {};
-      ctrl = h('div', { class: 'seg-group', role: 'group', 'aria-label': it.label + ' 판정' },
-        [['ok', '양호'], ['defect', '불량'], ['na', '해당없음']].map(([v, t]) => {
-          const b = h('button', { type: 'button', class: 'seg seg-' + v, 'aria-pressed': 'false', onclick: () => onCheck(it.key, v), text: t });
-          r.btns[v] = b; return b;
-        }),
-        (r.photoBtn = h('button', { type: 'button', class: 'seg seg-photo', style: S.aiOn ? null : 'display:none', onclick: () => { d.panel = !d.panel; syncRow(it.key); }, text: '사진' })));
+      ctrl = h('div', { class: 'ctrl' },
+        h('div', { class: 'seg-group', role: 'group', 'aria-label': it.label + ' 판정' },
+          [['ok', '양호'], ['defect', '불량'], ['na', '해당없음']].map(([v, t]) => {
+            const b = h('button', { type: 'button', class: 'seg seg-' + v, 'aria-pressed': 'false', onclick: () => onCheck(it.key, v), text: t });
+            r.btns[v] = b; return b;
+          })),
+        (r.photoBtn = h('button', { type: 'button', class: 'btn sm photo-toggle', style: S.aiOn ? null : 'display:none', onclick: () => { d.panel = !d.panel; syncRow(it.key); }, text: '사진' })));
     } else {
       r.input = h('input', {
         type: 'number', inputmode: 'decimal', step: it.step || 'any', class: 'num', placeholder: '입력',
         'aria-label': it.label + ' 측정값', oninput: (e) => onMeasure(it.key, e.target.value)
       });
       r.badge = h('span', { class: 'badge' });
-      ctrl = h('div', { class: 'measure' }, r.input, h('span', { class: 'unit', text: it.unit }),
-        h('span', { class: 'crit', text: '기준 ' + criteriaText(it) }), r.badge);
+      ctrl = h('div', { class: 'measure' }, r.input,
+        h('span', { class: 'crit', text: it.unit + ' · 기준 ' + criteriaText(it) }), r.badge);
     }
     r.el.append(h('div', { class: 'item-head' }, h('div', { class: 'item-label' }, h('span', { class: 'item-name', text: it.label })), ctrl));
 
     // 상세(불량) 영역
     r.memo = h('textarea', { rows: '2', placeholder: '특이사항 메모', 'aria-label': it.label + ' 특이사항', oninput: (e) => { d.memo = e.target.value; scheduleDraft(); } });
     r.urg = {};
+    const urgName = 'urg-' + it.key;
     const urgBtns = IT.urgency.map((u) => {
-      const b = h('button', { type: 'button', class: 'seg urg-' + u.key, 'aria-pressed': 'false', text: u.label, onclick: () => { d.urgency = u.key; syncRow(it.key); updateProgress(); scheduleDraft(); } });
-      r.urg[u.key] = b; return b;
+      const inp = h('input', { type: 'radio', name: urgName, value: u.key, 'aria-label': u.label, onchange: () => { d.urgency = u.key; syncRow(it.key); updateProgress(); scheduleDraft(); } });
+      r.urg[u.key] = inp;
+      return h('label', { class: 'chip urg-' + u.key }, inp, h('span', { text: u.label }));
     });
-    r.defectOnly = h('div', { class: 'd-row-wrap' },
-      h('div', { class: 'd-row' }, h('span', { class: 'lbl', text: '특이사항 메모' }), r.memo),
-      h('div', { class: 'd-row' }, h('span', { class: 'lbl', text: '긴급도' }), h('div', { class: 'seg-group', role: 'group', 'aria-label': '긴급도' }, urgBtns)));
-    r.defectOnly.style.display = 'flex'; r.defectOnly.style.flexDirection = 'column'; r.defectOnly.style.gap = '10px';
+    r.defectOnly = h('div', { class: 'd-main' },
+      h('div', { class: 'd-row' }, h('span', { class: 'lbl', text: '긴급도' }), h('div', { class: 'chip-group', role: 'radiogroup', 'aria-label': '긴급도' }, urgBtns)),
+      h('div', { class: 'd-row' }, h('span', { class: 'lbl', text: '특이사항 메모' }), r.memo));
     r.preview = h('img', { class: 'photo-preview', alt: it.label + ' 첨부 사진' });
     r.rmPhoto = h('button', { type: 'button', class: 'btn sm', text: '사진 삭제', onclick: () => { d.photo = null; d.ai = null; syncRow(it.key); } });
     r.aiBox = h('div', { class: 'ai-box' });
     r.detail = h('div', { class: 'item-detail' },
       r.defectOnly,
-      h('div', { class: 'd-row' }, h('span', { class: 'lbl', text: '사진 첨부' }),
+      h('div', { class: 'd-side' },
         h('div', { class: 'photo-row' },
+          r.preview,
           h('label', { class: 'btn sm file-btn' }, '사진 선택',
             h('input', { type: 'file', accept: 'image/*', capture: 'environment', 'aria-label': it.label + ' 사진 첨부', onchange: (e) => onPhoto(it.key, e.target) })),
-          r.preview, r.rmPhoto)),
-      r.aiBox);
+          r.rmPhoto),
+        r.aiBox));
     r.el.append(r.detail);
     return r.el;
   }
@@ -230,12 +278,13 @@
     } else {
       if (document.activeElement !== r.input) r.input.value = d.value === '' ? '' : String(d.value);
       r.badge.textContent = st === 'ok' ? '양호' : st === 'defect' ? '불량' : '';
-      r.badge.className = 'badge ' + (st || '');
+      r.badge.className = 'badge ' + (st === 'ok' || st === 'defect' ? st : '');
     }
     const open = st === 'defect' || (it.kind === 'check' && d.panel);
     r.detail.hidden = !open;
     r.defectOnly.hidden = st !== 'defect';
-    for (const u in r.urg) r.urg[u].setAttribute('aria-pressed', d.urgency === u ? 'true' : 'false');
+    r.detail.classList.toggle('no-def', st !== 'defect');
+    for (const u in r.urg) r.urg[u].checked = d.urgency === u;
     if (document.activeElement !== r.memo) r.memo.value = d.memo;
     if (d.photo) { r.preview.src = d.photo; r.preview.hidden = false; r.rmPhoto.hidden = false; }
     else { r.preview.removeAttribute('src'); r.preview.hidden = true; r.rmPhoto.hidden = true; }
@@ -285,19 +334,44 @@
 
   function updateProgress() {
     const s = stats();
-    $('#pg-text').textContent = s.done + ' / ' + s.total;
+    const pc = (n) => (s.total ? n / s.total * 100 : 0) + '%';
+    $('#pg-ok').style.width = pc(s.ok); $('#pg-bad').style.width = pc(s.defect); $('#pg-na').style.width = pc(s.na);
     const pct = s.total ? Math.round(s.done / s.total * 100) : 0;
-    $('#pg-fill').style.width = pct + '%';
     $('#pg-track').setAttribute('aria-valuenow', String(pct));
-    $('#pg-defect').textContent = s.defect;
-    $('#pg-urgent').textContent = s.urgent;
+    $('#pg-done').textContent = s.done; $('#pg-total').textContent = s.total;
+    $('#pg-ok-n').textContent = s.ok; $('#pg-bad-n').textContent = s.defect; $('#pg-na-n').textContent = s.na; $('#pg-un').textContent = s.unchecked;
+    $('#pg-urg').textContent = s.urgent; $('#pg-urg-wrap').hidden = !s.urgent;
+    $('#btn-complete').textContent = '점검 완료 (' + s.done + '/' + s.total + ')';
     for (const id in secRefs) {
-      const ref = secRefs[id]; let t = 0, dn = 0;
-      ref.sec.items.forEach((it) => { t++; if (S.data[it.key] && S.data[it.key].status) dn++; });
-      const txt = dn + '/' + t;
-      ref.cnt.textContent = txt; ref.navCnt.textContent = txt;
-      ref.navBtn.classList.toggle('done', t > 0 && dn === t);
+      const ref = secRefs[id]; let t = 0, dn = 0, bd = 0;
+      ref.sec.items.forEach((it) => { t++; const d = S.data[it.key]; if (d && d.status) { dn++; if (d.status === 'defect') bd++; } });
+      const all = t > 0 && dn === t;
+      ref.cnt.textContent = dn + '/' + t + ' 완료'; ref.cnt.classList.toggle('done', all);
+      ref.bad.textContent = bd ? bd + ' 불량' : ''; ref.bad.hidden = !bd;
+      ref.navCnt.textContent = dn + '/' + t; ref.navCnt.classList.toggle('done', all); ref.navCnt.classList.toggle('zero', dn === 0);
+      ref.navBad.textContent = bd ? bd + ' 불량' : ''; ref.navBad.hidden = !bd;
+      ref.navBtn.classList.toggle('done', all);
     }
+    updateStepper();
+  }
+  // 단계 표시줄
+  function updateStepper() {
+    const bar = $('#stepbar'); if (!bar) return;
+    bar.hidden = !(S.user && (S.view === 'inspect' || S.view === 'result'));
+    const i = S.info, infoOk = !!(i.vehicle && i.type && i.date);
+    const s = stats();
+    let st;
+    if (S.view === 'result') st = ['done', 'done', 'current'];
+    else if (!infoOk) st = ['current', 'pending', 'pending'];
+    else if (s.total > 0 && s.unchecked === 0) st = ['done', 'done', 'current'];
+    else st = ['done', 'current', 'pending'];
+    st.forEach((v, n) => {
+      const el = $('#st-' + (n + 1)); el.className = 'st ' + v;
+      $('.st-no', el).textContent = v === 'done' ? '✓' : String(n + 1);
+    });
+    const rec = S.view === 'result' && S.last ? S.last.rec : null;
+    const vehicle = rec ? rec.vehicle_type : i.vehicle, tn = rec ? rec.train_no : i.trainNo, tp = rec ? rec.inspection_type : i.type;
+    $('#st-sum').textContent = [vehicle, (tn || '').trim() || '편성번호 미입력', tp].join(' · ');
   }
 
   // ---------- 사진 ----------
@@ -601,6 +675,8 @@
   function showResult() {
     const L = S.last;
     $('#res-text').textContent = actionText(L.rec);
+    const sm = L.rec.results.summary, okN = L.rec.results.items.filter((i) => i.status === 'ok').length;
+    $('#rc-total').textContent = sm.total; $('#rc-ok').textContent = okN; $('#rc-bad').textContent = sm.defect; $('#rc-urg').textContent = sm.urgent;
     $('#res-ai-tag').hidden = true;
     $('#btn-retry-save').hidden = true;
     setState($('#res-xlsx'), '', '대기');
@@ -671,8 +747,8 @@
     ta.remove(); toast(ok ? '복사했습니다' : '복사하지 못했습니다. 직접 선택해 복사하세요', ok ? '' : 'warn');
   }
   async function withBusy(btn, label, fn) {
-    const old = btn.textContent; btn.disabled = true; btn.textContent = label;
-    try { return await fn(); } finally { btn.disabled = false; btn.textContent = old; }
+    const old = [...btn.childNodes]; btn.disabled = true; btn.textContent = label;
+    try { return await fn(); } finally { btn.disabled = false; btn.replaceChildren(...old); }
   }
 
   // ---------- 이력 ----------
@@ -711,7 +787,7 @@
       h('thead', null, h('tr', null, ['일자', '차종', '편성번호', '점검 종류', '점검자', '불량 수', ''].map((t) => h('th', { text: t })))),
       h('tbody', null, list.map((r) => h('tr', null,
         td('일자', r.inspected_on), td('차종', r.vehicle_type), td('편성번호', r.train_no || '-'), td('점검 종류', r.inspection_type), td('점검자', r.inspector_name),
-        td('불량 수', [String(r.defect_count || 0) + '건', r.urgent_count ? h('span', { class: 'urgent-n', text: ' (즉시조치 ' + r.urgent_count + ')' }) : null], 'num'),
+        td('불량 수', [String(r.defect_count || 0) + '건', r.urgent_count ? h('span', { class: 'badge-urg', text: '즉시 ' + r.urgent_count }) : null], 'num'),
         td('', h('a', { class: 'btn sm', href: '#detail/' + encodeURIComponent(r.id), text: '상세' })))))));
   }
 
@@ -777,11 +853,13 @@
 
   // ---------- 라우팅 ----------
   function showView(name) {
+    S.view = name;
     ['login', 'inspect', 'result', 'history', 'detail', 'admin'].forEach((v) => { $('#view-' + v).hidden = v !== name; });
     $('#nav-inspect').classList.toggle('is-on', name === 'inspect' || name === 'result');
     $('#nav-history').classList.toggle('is-on', name === 'history' || name === 'detail');
     $('#nav-admin').classList.toggle('is-on', name === 'admin');
     window.scrollTo(0, 0);
+    updateStepper();
   }
   async function showAdmin() {
     const root = document.getElementById('admin-root');
@@ -866,8 +944,8 @@
     try { await DB.init(); } catch (e) { toast('저장소 초기화 실패: ' + e.message, 'error'); }
 
     // 이벤트
-    $('#f-date').addEventListener('change', (e) => { S.info.date = e.target.value || todayStr(); scheduleDraft(); });
-    $('#f-train').addEventListener('input', (e) => { S.info.trainNo = e.target.value; scheduleDraft(); });
+    $('#f-date').addEventListener('change', (e) => { S.info.date = e.target.value || todayStr(); scheduleDraft(); updateStepper(); });
+    $('#f-train').addEventListener('input', (e) => { S.info.trainNo = e.target.value; scheduleDraft(); updateStepper(); });
     $('#f-vehicle').addEventListener('change', (e) => changeInfo('vehicle', e.target.value, e.target));
     $('#f-type').addEventListener('change', (e) => changeInfo('type', e.target.value, e.target));
     $('#btn-sample').addEventListener('click', fillSample);

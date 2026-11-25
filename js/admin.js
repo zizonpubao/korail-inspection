@@ -3,7 +3,7 @@
 (function () {
   'use strict';
 
-  var COLOR = { blue: '#005BAC', blueLight: 'rgba(0,91,172,0.22)', imm: '#C62828', today: '#E08600', next: '#77777A', grid: '#E3E8EE', text: '#1B1F24' };
+  var COLOR = { blue: '#005BAC', blueLight: 'rgba(0,91,172,0.22)', imm: '#C62828', today: '#E08600', next: '#77777A', grid: '#EEF1F5', text: '#1B1F24' };
   var URG_LABEL = { immediate: '즉시 조치', today: '금일 내', next: '다음 정비 시' };
 
   var S = { root: null, ctx: null, token: 0, charts: [], filters: { days: 30, vehicle: '' }, busy: false, modal: null, body: null, status: null, btns: [] };
@@ -271,13 +271,27 @@
     page.appendChild(el('h1', 'page-title', '정비 현황'));
     var bar = el('div', 'adm-bar');
     var fs = el('div', 'adm-filters');
-    fs.appendChild(field('기간', select([['7', '최근 7일'], ['30', '최근 30일'], ['90', '최근 90일'], ['0', '전체']], S.filters.days, function (v) { S.filters.days = +v; draw(); })));
+    var pf = el('div', 'field'); pf.appendChild(el('span', null, '기간'));
+    var segs = el('div', 'adm-seg'); segs.setAttribute('role', 'group'); segs.setAttribute('aria-label', '기간');
+    var segBtns = [];
+    [[7, '7일'], [30, '30일'], [90, '90일'], [0, '전체']].forEach(function (o) {
+      var b = el('button', 'adm-seg-btn', o[1]); b.type = 'button';
+      b.setAttribute('aria-pressed', S.filters.days === o[0] ? 'true' : 'false');
+      b.addEventListener('click', function () {
+        if (S.filters.days === o[0]) return;
+        S.filters.days = o[0];
+        segBtns.forEach(function (x) { x.setAttribute('aria-pressed', x === b ? 'true' : 'false'); });
+        draw();
+      });
+      segBtns.push(b); segs.appendChild(b);
+    });
+    pf.appendChild(segs); fs.appendChild(pf);
     var vopts = [['', '전체']].concat(window.ITEMS.vehicles.map(function (v) { return [v, v]; }));
     fs.appendChild(field('차종', select(vopts, S.filters.vehicle, function (v) { S.filters.vehicle = v; draw(); })));
     bar.appendChild(fs);
     var acts = el('div', 'adm-acts');
-    var g = el('button', 'btn', '예시 이력 생성'); g.type = 'button'; g.addEventListener('click', genDemo);
-    var d = el('button', 'btn danger', '예시 이력 삭제'); d.type = 'button'; d.addEventListener('click', delDemo);
+    var g = el('button', 'btn sm', '예시 이력 생성'); g.type = 'button'; g.addEventListener('click', genDemo);
+    var d = el('button', 'btn sm danger', '예시 이력 삭제'); d.type = 'button'; d.addEventListener('click', delDemo);
     acts.appendChild(g); acts.appendChild(d);
     S.btns = [g, d];
     bar.appendChild(acts);
@@ -291,24 +305,32 @@
     setBusy(S.busy);
   }
 
-  function panel(title, wide) {
+  function panel(title, wide, sub) {
     var p = el('section', 'adm-panel' + (wide ? ' wide' : ''));
-    p.appendChild(el('h2', null, title));
+    var h = el('div', 'adm-ph');
+    h.appendChild(el('h2', null, title));
+    if (sub) h.appendChild(el('span', 'adm-sub', sub));
+    p.appendChild(h);
     return p;
   }
   function tableWrap(headers, rows, opt) {
     opt = opt || {};
     var wrap = el('div', 'adm-scroll');
     var t = el('table', 'grid adm-tbl');
+    if (opt.widths) {
+      var cg = el('colgroup');
+      opt.widths.forEach(function (w) { var c = el('col'); if (w) c.style.width = w; cg.appendChild(c); });
+      t.appendChild(cg);
+    }
     var thead = el('thead'), tr = el('tr');
-    headers.forEach(function (h) { tr.appendChild(el('th', null, h)); });
+    headers.forEach(function (h) { var th = el('th', null, h); th.title = h; tr.appendChild(th); });
     thead.appendChild(tr); t.appendChild(thead);
     var tb = el('tbody');
     rows.forEach(function (row) {
       var r = el('tr');
       row.cells.forEach(function (c, i) {
         var td = el('td', c && c.cls ? c.cls : (opt.num && opt.num.indexOf(i) >= 0 ? 'num' : ''));
-        if (c && c.node) td.appendChild(c.node); else td.textContent = c && c.t != null ? c.t : (c == null ? '' : c);
+        if (c && c.node) td.appendChild(c.node); else { var tx = c && c.t != null ? c.t : (c == null ? '' : c); td.textContent = tx; if (tx !== '') td.title = String(tx); }
         r.appendChild(td);
       });
       if (row.onClick) {
@@ -321,8 +343,8 @@
     t.appendChild(tb); wrap.appendChild(t);
     return wrap;
   }
-  function chartBox(title, id, labels, series, makeCfg, fallbackHeaders, fallbackRows) {
-    var p = panel(title);
+  function chartBox(title, id, labels, series, makeCfg, fallbackHeaders, fallbackRows, sub) {
+    var p = panel(title, false, sub);
     if (window.Chart) {
       var box = el('div', 'adm-chart');
       var cv = el('canvas'); cv.id = id; cv.setAttribute('role', 'img'); cv.setAttribute('aria-label', title);
@@ -330,7 +352,7 @@
       p._init = function () {
         try {
           Chart.defaults.font.family = 'Pretendard, system-ui, "Malgun Gothic", sans-serif';
-          Chart.defaults.font.size = 12; Chart.defaults.color = COLOR.text;
+          Chart.defaults.font.size = 11; Chart.defaults.color = COLOR.next;
           S.charts.push(new Chart(cv.getContext('2d'), makeCfg()));
         } catch (e) {
           box.remove(); p.appendChild(tableWrap(fallbackHeaders, fallbackRows, { num: [1, 2] }));
@@ -344,26 +366,101 @@
   function baseOpts(extra) {
     var o = { animation: false, responsive: true, maintainAspectRatio: false,
       plugins: { legend: { display: false }, tooltip: { enabled: true } },
-      scales: { x: { grid: { color: COLOR.grid }, ticks: { precision: 0 } }, y: { grid: { color: COLOR.grid }, beginAtZero: true, ticks: { precision: 0 } } } };
+      elements: { bar: { borderRadius: 0 } },
+      scales: { x: { grid: { color: COLOR.grid }, ticks: { precision: 0, font: { size: 11 }, color: COLOR.next } }, y: { grid: { color: COLOR.grid }, beginAtZero: true, ticks: { precision: 0, font: { size: 11 }, color: COLOR.next } } } };
     if (extra) Object.keys(extra).forEach(function (k) { o[k] = extra[k]; });
     return o;
   }
 
-  function renderBody(a) {
+
+  // ---------- 지표 카드 ----------
+  var SVGNS = 'http://www.w3.org/2000/svg';
+  function sparkline(vals, color) {
+    var svg = document.createElementNS(SVGNS, 'svg');
+    svg.setAttribute('class', 'adm-spark'); svg.setAttribute('viewBox', '0 0 100 22');
+    svg.setAttribute('preserveAspectRatio', 'none'); svg.setAttribute('aria-hidden', 'true');
+    var max = Math.max.apply(null, vals), min = Math.min.apply(null, vals), rng = max - min;
+    var pts = vals.map(function (v, i) {
+      var x = vals.length > 1 ? i * 100 / (vals.length - 1) : 50;
+      var y = rng ? 20 - (v - min) / rng * 18 : 11;
+      return x.toFixed(1) + ',' + y.toFixed(1);
+    }).join(' ');
+    var pl = document.createElementNS(SVGNS, 'polyline');
+    pl.setAttribute('points', pts); pl.setAttribute('fill', 'none'); pl.setAttribute('stroke', color);
+    pl.setAttribute('stroke-width', '1.5'); pl.setAttribute('vector-effect', 'non-scaling-stroke');
+    pl.setAttribute('stroke-linejoin', 'round');
+    svg.appendChild(pl);
+    return svg;
+  }
+  // 기간을 K구간으로 나눈 지표별 값
+  function bucketize(recs, days) {
+    var today = new Date(); today = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    var start, total;
+    if (days) { start = addDays(today, -(days - 1)); total = days; }
+    else {
+      var min = null;
+      recs.forEach(function (r) { var d = String(r.inspected_on); if (min === null || d < min) min = d; });
+      start = min ? parseYmd(min) : today;
+      total = Math.max(1, Math.round((today - start) / 86400000) + 1);
+    }
+    var K = days === 7 ? 7 : Math.min(10, Math.max(7, total));
+    var bs = [];
+    for (var i = 0; i < K; i++) bs.push({ n: 0, def: 0, judged: 0, imm: 0, tr: {} });
+    recs.forEach(function (r) {
+      var off = Math.round((parseYmd(r.inspected_on) - start) / 86400000);
+      if (off < 0 || off >= total) return;
+      var b = bs[Math.min(K - 1, Math.floor(off * K / total))];
+      b.n++;
+      itemsOf(r).forEach(function (it) {
+        if (it.status === 'ok' || it.status === 'defect') b.judged++;
+        if (it.status === 'defect') { b.def++; if (it.urgency === 'immediate') { b.imm++; b.tr[(r.vehicle_type || '-') + '|' + (r.train_no || '-')] = true; } }
+      });
+    });
+    return bs;
+  }
+  function buildTiles(a, prev, info) {
+    var days = info.days, bs = bucketize(info.recs, days);
+    var nTr = Object.keys(a.trainsImm).length;
+    var rateV = a.judged ? a.defects / a.judged * 100 : 0;
+    var pRate = prev && prev.judged ? prev.defects / prev.judged * 100 : 0;
+    var defs = [
+      { k: '점검 수', v: a.n + '건', cur: a.n, pre: prev && prev.n, unit: '건', dir: 'neutral', ser: bs.map(function (b) { return b.n; }) },
+      { k: '불량 건수', v: a.defects + '건', cur: a.defects, pre: prev && prev.defects, unit: '건', ser: bs.map(function (b) { return b.def; }) },
+      { k: '불량률', v: rateV.toFixed(1) + '%', cur: rateV, pre: pRate, unit: '%p', dec: 1, ser: bs.map(function (b) { return b.judged ? b.def / b.judged * 100 : 0; }) },
+      { k: '즉시조치 건수', v: a.immediate + '건', cur: a.immediate, pre: prev && prev.immediate, unit: '건', imm: true, ser: bs.map(function (b) { return b.imm; }) },
+      { k: '즉시조치 편성 수', v: nTr + '편성', cur: nTr, pre: prev && Object.keys(prev.trainsImm).length, unit: '편성', imm: true, ser: bs.map(function (b) { return Object.keys(b.tr).length; }) }
+    ];
+    var tiles = el('div', 'adm-tiles');
+    defs.forEach(function (t) {
+      var c = el('div', 'adm-tile' + (t.imm ? ' imm' : ''));
+      c.appendChild(el('div', 'adm-tile-k', t.k));
+      c.appendChild(el('div', 'adm-tile-v', t.v));
+      var d = el('div', 'adm-delta');
+      if (!days) { d.textContent = '전체 기간'; d.className += ' flat'; }
+      else {
+        var diff = t.cur - t.pre, dec = t.dec || 0;
+        var num = Math.abs(diff).toFixed(dec);
+        if (Number(num) === 0) { d.textContent = '직전 ' + days + '일 대비 변동 없음'; d.className += ' flat'; }
+        else {
+          var up = diff > 0;
+          d.className += t.dir === 'neutral' ? ' flat' : (up ? ' up' : ' down');
+          d.textContent = '직전 ' + days + '일 대비 ' + (up ? '▲' : '▼') + ' ' + num + t.unit;
+        }
+      }
+      c.appendChild(d);
+      c.appendChild(sparkline(t.ser, t.imm ? COLOR.imm : COLOR.blue));
+      tiles.appendChild(c);
+    });
+    return tiles;
+  }
+
+  function renderBody(a, prev, info) {
     S.body.textContent = '';
     if (!a.n) {
       S.body.appendChild(el('div', 'empty', "기록이 없습니다. '예시 이력 생성'으로 시연 데이터를 만들 수 있습니다."));
       return;
     }
-    // 지표 타일
-    var rate = a.judged ? (a.defects / a.judged * 100).toFixed(1) + '%' : '0.0%';
-    var tiles = el('div', 'summary adm-tiles');
-    [['점검 수', a.n + '건', ''], ['불량 건수', a.defects + '건', ''], ['불량률', rate, ''],
-     ['즉시조치 건수', a.immediate + '건', a.immediate ? 'bad' : ''], ['즉시조치 편성 수', Object.keys(a.trainsImm).length + '편성', Object.keys(a.trainsImm).length ? 'bad' : '']
-    ].forEach(function (t) {
-      var c = el('div', 'sum-cell'); c.appendChild(el('div', 'k', t[0])); c.appendChild(el('div', 'v' + (t[2] ? ' c-bad' : ''), t[1])); tiles.appendChild(c);
-    });
-    S.body.appendChild(tiles);
+    S.body.appendChild(buildTiles(a, prev, info));
 
     var grid = el('div', 'adm-grid');
     S.body.appendChild(grid);
@@ -372,24 +469,24 @@
     // 1 일자별 추이
     var dl = a.dayList;
     panels.push(chartBox('일자별 점검 수 · 불량 건수', 'adm-c-daily', dl, null, function () {
-      var o = baseOpts({ plugins: { legend: { display: true, position: 'bottom', labels: { boxWidth: 12 } } } });
-      o.scales.x.ticks = { maxTicksLimit: 8, autoSkip: true, maxRotation: 0 };
+      var o = baseOpts({ plugins: { legend: { display: true, position: 'top', align: 'start', labels: { boxWidth: 10, boxHeight: 10, font: { size: 11 }, color: COLOR.next } } } });
+      o.scales.x.ticks = { maxTicksLimit: 8, autoSkip: true, maxRotation: 0, font: { size: 11 }, color: COLOR.next };
       return { type: 'bar', data: { labels: dl.map(function (x) { return x.date.slice(5); }), datasets: [
-        { type: 'bar', label: '점검 수', data: dl.map(function (x) { return x.n; }), backgroundColor: COLOR.blueLight, borderWidth: 0, order: 2 },
+        { type: 'bar', label: '점검 수', data: dl.map(function (x) { return x.n; }), backgroundColor: COLOR.blueLight, borderWidth: 0, maxBarThickness: 28, order: 2 },
         { type: 'line', label: '불량 건수', data: dl.map(function (x) { return x.def; }), borderColor: COLOR.blue, backgroundColor: COLOR.blue, borderWidth: 2, pointRadius: 2, tension: 0, order: 1 }] }, options: o };
-    }, ['일자', '점검 수', '불량 건수'], dl.filter(function (x) { return x.n || x.def; }).map(function (x) { return { cells: [x.date, x.n, x.def] }; })));
+    }, ['일자', '점검 수', '불량 건수'], dl.filter(function (x) { return x.n || x.def; }).map(function (x) { return { cells: [x.date, x.n, x.def] }; }), '막대 점검 수 · 선 불량 건수'));
 
     // 2 차종별
     var vk = window.ITEMS.vehicles;
     panels.push(chartBox('차종별 불량 건수', 'adm-c-veh', vk, null, function () {
-      return { type: 'bar', data: { labels: vk, datasets: [{ data: vk.map(function (v) { return a.byVehicle[v] || 0; }), backgroundColor: COLOR.blue, borderWidth: 0, maxBarThickness: 48 }] }, options: baseOpts() };
+      return { type: 'bar', data: { labels: vk, datasets: [{ data: vk.map(function (v) { return a.byVehicle[v] || 0; }), backgroundColor: COLOR.blue, borderWidth: 0, maxBarThickness: 28 }] }, options: baseOpts() };
     }, ['차종', '불량 건수'], vk.map(function (v) { return { cells: [v, a.byVehicle[v] || 0] }; })));
 
     // 3 분야별
     var sl = a.sectionList;
     var sp = chartBox('분야별 불량 건수', 'adm-c-sec', sl, null, function () {
       var o = baseOpts({ indexAxis: 'y' });
-      o.scales = { x: { grid: { color: COLOR.grid }, beginAtZero: true, ticks: { precision: 0 } }, y: { grid: { display: false } } };
+      o.scales = { x: { grid: { color: COLOR.grid }, beginAtZero: true, ticks: { precision: 0, font: { size: 11 }, color: COLOR.next } }, y: { grid: { display: false }, ticks: { font: { size: 11 }, color: COLOR.next } } };
       return { type: 'bar', data: { labels: sl.map(function (x) { return x[0]; }), datasets: [{ data: sl.map(function (x) { return x[1]; }), backgroundColor: COLOR.blue, borderWidth: 0, maxBarThickness: 22 }] }, options: o };
     }, ['분야', '불량 건수'], sl.map(function (x) { return { cells: [x[0], x[1]] }; }));
     if (sl.length > 6) { var cb = sp.querySelector('.adm-chart'); if (cb) cb.style.height = Math.min(360, 40 + sl.length * 28) + 'px'; }
@@ -398,35 +495,45 @@
     // 4 긴급도
     var uk = ['immediate', 'today', 'next'], uc = [COLOR.imm, COLOR.today, COLOR.next];
     panels.push(chartBox('긴급도 분포 (불량 항목)', 'adm-c-urg', uk, null, function () {
-      var o = baseOpts({ indexAxis: 'y', plugins: { legend: { display: true, position: 'bottom', labels: { boxWidth: 12 } } } });
-      o.scales = { x: { stacked: true, grid: { color: COLOR.grid }, beginAtZero: true, ticks: { precision: 0 } }, y: { stacked: true, grid: { display: false } } };
-      return { type: 'bar', data: { labels: ['불량 항목'], datasets: uk.map(function (k, i) { return { label: URG_LABEL[k], data: [a.byUrg[k]], backgroundColor: uc[i], borderWidth: 0, maxBarThickness: 48 }; }) }, options: o };
+      var o = baseOpts({ indexAxis: 'y', plugins: { legend: { display: true, position: 'top', align: 'start', labels: { boxWidth: 10, boxHeight: 10, font: { size: 11 }, color: COLOR.next } } } });
+      o.scales = { x: { stacked: true, grid: { color: COLOR.grid }, beginAtZero: true, ticks: { precision: 0, font: { size: 11 }, color: COLOR.next } }, y: { stacked: true, grid: { display: false }, ticks: { font: { size: 11 }, color: COLOR.next } } };
+      return { type: 'bar', data: { labels: ['불량 항목'], datasets: uk.map(function (k, i) { return { label: URG_LABEL[k], data: [a.byUrg[k]], backgroundColor: uc[i], borderWidth: 0, maxBarThickness: 28 }; }) }, options: o };
     }, ['긴급도', '건수'], uk.map(function (k) { return { cells: [URG_LABEL[k], a.byUrg[k]] }; })));
 
     // 5 반복 불량
-    var rp = panel('반복 불량 상위 10');
+    var rp = panel('반복 불량 상위 10', false, '횟수 기준');
     var maxN = a.repeatList.length ? a.repeatList[0].n : 1;
     if (!a.repeatList.length) rp.appendChild(el('p', 'muted adm-none', '불량 기록이 없습니다.'));
-    else rp.appendChild(tableWrap(['항목', '분야', '횟수', '최근 발생일', ''], a.repeatList.map(function (x) {
-      var bar = el('div', 'adm-bar-track'); var f = el('div', 'adm-bar-fill'); f.style.width = Math.max(4, Math.round(x.n / maxN * 100)) + '%'; bar.appendChild(f);
-      return { cells: [x.label, x.section, { t: x.n, cls: 'num' }, x.last, { node: bar, cls: 'adm-barcell' }] };
-    })));
+    else {
+      var rl = el('ol', 'adm-rank');
+      a.repeatList.forEach(function (x) {
+        var li = el('li', 'adm-rank-row');
+        var nm = el('div', 'adm-rank-name');
+        var t1 = el('div', 'adm-rank-label', x.label); t1.title = x.label;
+        var t2 = el('div', 'adm-rank-sub', (x.section || '-') + ' · 최근 ' + x.last);
+        nm.appendChild(t1); nm.appendChild(t2);
+        var bar = el('div', 'adm-bar-track'); var f = el('div', 'adm-bar-fill'); f.style.width = Math.max(3, Math.round(x.n / maxN * 100)) + '%'; bar.appendChild(f);
+        li.appendChild(nm); li.appendChild(bar); li.appendChild(el('div', 'adm-rank-n', x.n + '회'));
+        rl.appendChild(li);
+      });
+      rp.appendChild(rl);
+    }
     panels.push(rp);
 
     // 6 최근 즉시조치
-    var ip = panel('최근 즉시조치 목록');
+    var ip = panel('최근 즉시조치 목록', true, '최대 10건 · 행을 누르면 상세');
     if (!a.immList.length) ip.appendChild(el('p', 'muted adm-none', '즉시조치 기록이 없습니다.'));
     else ip.appendChild(tableWrap(['일자', '차종', '편성', '항목', '메모'], a.immList.map(function (x) {
       return { cells: [x.date, x.vehicle, x.train, x.label, x.memo], onClick: function () { if (S.ctx && S.ctx.openDetail) S.ctx.openDetail(x.id); } };
-    })));
+    }), { widths: ['88px', '14%', '20%', '24%', ''] }));
     panels.push(ip);
 
     // 7 편성별
-    var tp = panel('편성별 현황', true);
-    tp.appendChild(tableWrap(['편성번호', '차종', '최근 점검일', '점검 수', '누적 불량', '최근 점검 즉시조치'], a.trainList.map(function (x) {
+    var tp = panel('편성별 현황', true, '불량 많은 순');
+    tp.appendChild(tableWrap(['편성번호', '차종', '최근 점검일', '점검 수', '누적 불량', '최근 즉시조치'], a.trainList.map(function (x) {
       var imm = hasImmediate(x.lastRec);
       return { cells: [x.train, x.vehicle, x.last, { t: x.n, cls: 'num' }, { t: x.def, cls: 'num' }, imm ? { t: '있음', cls: 'c-bad adm-strong' } : '없음'] };
-    })));
+    }), { widths: ['24%', '16%', '88px', '12%', '12%', ''] }));
     panels.push(tp);
 
     panels.forEach(function (p) { grid.appendChild(p); });
@@ -441,7 +548,7 @@
     killCharts();
     var recs;
     try {
-      var from = S.filters.days ? ymd(addDays(new Date(), -(S.filters.days - 1))) : undefined;
+      var from = S.filters.days ? ymd(addDays(new Date(), -(2 * S.filters.days - 1))) : undefined;
       recs = await loadAll(from);
     } catch (e) {
       if (tk !== S.token) return;
@@ -451,7 +558,13 @@
     }
     if (tk !== S.token) return;
     if (S.filters.vehicle) recs = recs.filter(function (r) { return r.vehicle_type === S.filters.vehicle; });
-    renderBody(aggregate(recs, S.filters.days));
+    var cur = recs, prev = null;
+    if (S.filters.days) {
+      var cf = ymd(addDays(new Date(), -(S.filters.days - 1)));
+      cur = recs.filter(function (r) { return String(r.inspected_on) >= cf; });
+      prev = recs.filter(function (r) { return String(r.inspected_on) < cf; });
+    }
+    renderBody(aggregate(cur, S.filters.days), prev ? aggregate(prev, 0) : null, { days: S.filters.days, recs: cur });
   }
 
   window.Admin = {
