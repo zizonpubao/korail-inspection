@@ -367,3 +367,12 @@ table.grid td.num { text-align: right; font-variant-numeric: tabular-nums; }
   body.print-mode #print-area { display: block; }
   @page { size: A4 portrait; margin: 10mm; }
 }
+
+/* Gemini 2차 판단 */
+.gem-line { margin: 6px 0 0; font-size: 13px; overflow-wrap: anywhere; }
+.gem-wait, .gem-na { color: var(--sub); }
+.gem-err { font-size: 12px; }
+.gem-v { font-weight: 600; }
+.gem-v.gem-bad { color: #C62828; }
+.gem-v.gem-ok { color: #2E7D32; }
+.gem-v.gem-na { color: var(--sub); }

@@ -32,19 +32,39 @@ module.exports = async (req, res) => {
   }
 
   let body = req.body;
-  if (typeof body === 'string' && body.length > 50000) return send(res, 413, { error: 'payload_too_large' });
-  if (body && typeof body === 'object') {
-    let len = 0;
-    try { len = JSON.stringify(body).length; } catch (e) { return send(res, 400, { error: 'bad_request' }); }
-    if (len > 50000) return send(res, 413, { error: 'payload_too_large' });
-  }
+  const MAX_ANY = 3000000;
+  if (typeof body === 'string' && body.length > MAX_ANY) return send(res, 413, { error: 'payload_too_large' });
   if (typeof body === 'string') {
     try { body = JSON.parse(body); } catch (e) { return send(res, 400, { error: 'bad_request' }); }
   }
   if (!body || typeof body !== 'object') body = {};
   const q = req.query || {};
   const mode = String(q.mode || body.mode || 'report');
-  if (mode !== 'report' && mode !== 'trend') return send(res, 400, { error: 'bad_mode' });
+  if (['report', 'trend', 'vision', 'brief'].indexOf(mode) < 0) return send(res, 400, { error: 'bad_mode' });
+  let len = 0;
+  try { len = JSON.stringify(body).length; } catch (e) { return send(res, 400, { error: 'bad_request' }); }
+  if (len > (mode === 'vision' ? MAX_ANY : 50000)) return send(res, 413, { error: 'payload_too_large' });
+  if (mode === 'vision') {
+    const m = /^data:(image\/(?:jpeg|png|webp));base64,([A-Za-z0-9+/]+={0,2})$/.exec(String(body.image || ''));
+    if (!m) return send(res, 400, { error: 'bad_image' });
+    const pad = m[2].endsWith('==') ? 2 : m[2].endsWith('=') ? 1 : 0;
+    if (Math.floor(m[2].length * 3 / 4) - pad > 2 * 1024 * 1024) return send(res, 413, { error: 'image_too_large' });
+  }
+  if (mode === 'brief') {
+    const cutS = (v) => {
+      if (typeof v === 'string') return v.slice(0, 100);
+      if (Array.isArray(v)) return v.map(cutS);
+      if (v && typeof v === 'object') { const o = {}; for (const k of Object.keys(v)) o[k] = cutS(v[k]); return o; }
+      return v;
+    };
+    body = {
+      mode: 'brief',
+      period: cutS(body.period),
+      kpis: cutS(body.kpis),
+      topDefects: cutS(Array.isArray(body.topDefects) ? body.topDefects.slice(0, 10) : []),
+      trains: cutS(Array.isArray(body.trains) ? body.trains.slice(0, 15) : [])
+    };
+  }
   if (Array.isArray(body.defects) && body.defects.length > 50) {
     return send(res, 400, { error: 'too_many_defects' });
   }
@@ -63,8 +83,9 @@ module.exports = async (req, res) => {
   }
 
   try {
-    const text = await generate(mode, body);
-    return send(res, 200, { text });
+    const out = await generate(mode, body);
+    if (mode === 'vision') return send(res, 200, { result: out });
+    return send(res, 200, { text: out });
   } catch (err) {
     const code = err && err.code;
     if (code === 'TIMEOUT') return send(res, 504, { error: 'timeout' });

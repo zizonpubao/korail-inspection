@@ -75,7 +75,15 @@
     if (it.max != null && v > it.max) return 'defect';
     return 'ok';
   }
-  const aiText = (a) => a ? a.top + ' ' + Math.round(a.prob * 100) + '%' : '';
+  const gemText = (g) => g && g.verdict ? g.verdict + ' ' + Math.round((g.confidence || 0) * 100) + '%' : '';
+  const aiText = (a) => {
+    if (!a) return '';
+    const p = [];
+    if (a.top) p.push((a.gemini ? 'TM ' : '') + a.top + ' ' + Math.round(a.prob * 100) + '%');
+    if (a.gemini && a.gemini.verdict) p.push('Gemini ' + gemText(a.gemini));
+    return p.join(' / ');
+  };
+  const geminiOn = () => typeof AI !== 'undefined' && typeof AI.vision === 'function' && typeof AI.serverAvailable === 'function' && AI.serverAvailable() && typeof DB !== 'undefined' && DB.mode === 'supabase';
 
   // ---------- 상태 ----------
   const S = {
@@ -227,7 +235,7 @@
             const b = h('button', { type: 'button', class: 'seg seg-' + v, 'aria-pressed': 'false', onclick: () => onCheck(it.key, v), text: t });
             r.btns[v] = b; return b;
           })),
-        (r.photoBtn = h('button', { type: 'button', class: 'btn sm photo-toggle', style: S.aiOn ? null : 'display:none', onclick: () => { d.panel = !d.panel; syncRow(it.key); }, text: '사진' })));
+        (r.photoBtn = h('button', { type: 'button', class: 'btn sm photo-toggle', style: (S.aiOn || geminiOn()) ? null : 'display:none', onclick: () => { d.panel = !d.panel; syncRow(it.key); }, text: '사진' })));
     } else {
       r.input = h('input', {
         type: 'number', inputmode: 'decimal', step: it.step || 'any', class: 'num', placeholder: '입력',
@@ -252,7 +260,7 @@
       h('div', { class: 'd-row' }, h('span', { class: 'lbl', text: '긴급도' }), h('div', { class: 'chip-group', role: 'radiogroup', 'aria-label': '긴급도' }, urgBtns)),
       h('div', { class: 'd-row' }, h('span', { class: 'lbl', text: '특이사항 메모' }), r.memo));
     r.preview = h('img', { class: 'photo-preview', alt: it.label + ' 첨부 사진' });
-    r.rmPhoto = h('button', { type: 'button', class: 'btn sm', text: '사진 삭제', onclick: () => { d.photo = null; d.ai = null; syncRow(it.key); } });
+    r.rmPhoto = h('button', { type: 'button', class: 'btn sm', text: '사진 삭제', onclick: () => { d.photo = null; d.ai = null; d.reqId = (d.reqId || 0) + 1; d.aiBusy = false; d.gemBusy = false; d.gemErr = false; syncRow(it.key); scheduleDraft(); } });
     r.aiBox = h('div', { class: 'ai-box' });
     r.detail = h('div', { class: 'item-detail' },
       r.defectOnly,
@@ -293,19 +301,28 @@
 
   function renderAiBox(r, d) {
     const box = r.aiBox; box.textContent = '';
-    if (!S.aiOn || !d.photo) { box.hidden = true; return; }
-    if (d.aiBusy) { box.hidden = false; box.append(h('p', { class: 'ai-line', text: 'AI 판정 중...' })); return; }
-    if (d.aiErr) { box.hidden = true; return; }
-    if (!d.ai) { box.hidden = true; return; }
+    if (!d.photo) { box.hidden = true; return; }
+    const tmShown = S.aiOn && (d.aiBusy || (d.ai && d.ai.top));
+    const gem = d.ai && d.ai.gemini;
+    if (!tmShown && !d.gemBusy && !gem && !d.gemErr) { box.hidden = true; return; }
     box.hidden = false;
-    box.append(h('p', { class: 'ai-line', text: 'AI 참고: ' + aiText(d.ai) }));
-    Object.keys(d.ai.probs || {}).forEach((name) => {
-      const pct = Math.round(d.ai.probs[name] * 100);
-      const fill = h('div', { class: 'ai-fill' }); fill.style.width = pct + '%';
-      box.append(h('div', { class: 'ai-bar' }, h('span', { text: name }), h('div', { class: 'ai-track' }, fill), h('span', { text: pct + '%' })));
-    });
+    if (S.aiOn && d.aiBusy) box.append(h('p', { class: 'ai-line', text: 'AI 판정 중...' }));
+    else if (d.ai && d.ai.top) {
+      box.append(h('p', { class: 'ai-line', text: 'AI 참고: ' + d.ai.top + ' ' + Math.round(d.ai.prob * 100) + '%' }));
+      Object.keys(d.ai.probs || {}).forEach((name) => {
+        const pct = Math.round(d.ai.probs[name] * 100);
+        const fill = h('div', { class: 'ai-fill' }); fill.style.width = pct + '%';
+        box.append(h('div', { class: 'ai-bar' }, h('span', { text: name }), h('div', { class: 'ai-track' }, fill), h('span', { text: pct + '%' })));
+      });
+    }
+    if (d.gemBusy) box.append(h('p', { class: 'gem-line gem-wait', text: 'Gemini 분석 중…' }));
+    else if (gem) {
+      const cls = String(gem.verdict).includes('의심') ? 'gem-bad' : gem.verdict === '정상' ? 'gem-ok' : 'gem-na';
+      box.append(h('p', { class: 'gem-line' }, h('span', { class: 'gem-v ' + cls, text: 'Gemini: ' + gemText(gem) }), h('span', { text: gem.reason ? ' · ' + gem.reason : '' })));
+    } else if (d.gemErr) box.append(h('p', { class: 'gem-line gem-na gem-err', text: 'Gemini 판단을 받지 못했습니다' }));
     box.append(h('p', { class: 'ai-note', text: 'AI 판정은 참고용이며 최종 판정은 점검자가 합니다' }));
-    if (String(d.ai.top).includes('의심') && d.status !== 'defect') {
+    const sus = (d.ai && d.ai.top && String(d.ai.top).includes('의심')) || (gem && String(gem.verdict).includes('의심'));
+    if (sus && d.status !== 'defect') {
       box.append(h('button', { type: 'button', class: 'btn sm', text: '불량으로 표시', onclick: () => onCheck(r.it.key, 'defect') }));
     }
   }
@@ -398,21 +415,37 @@
     const d = getD(key);
     try {
       const res = await resizeImage(f);
-      d.photo = res.dataUrl; d.ai = null; d.aiErr = false;
+      d.photo = res.dataUrl; d.ai = null; d.aiErr = false; d.gemErr = false; d.aiBusy = false; d.gemBusy = false;
+      const id = d.reqId = (d.reqId || 0) + 1;
       syncRow(key);
+      if (geminiOn()) runGemini(key, res.dataUrl, id);
       let on = S.aiOn;
       if (!on) { try { on = !!(await AI.tmAvailable()); } catch (e) { on = false; } if (on) { S.aiOn = true; showPhotoBtns(); } }
-      if (on) runAi(key, res.canvas);
+      if (on && d.reqId === id) runAi(key, res.canvas, id);
     } catch (e) { toast('사진을 불러오지 못했습니다', 'error'); }
   }
-  async function runAi(key, canvas) {
+  async function runAi(key, canvas, id) {
     const d = getD(key);
     d.aiBusy = true; d.aiErr = false; syncRow(key);
     try {
       const res = await AI.classify(canvas);
-      d.ai = res; scheduleDraft();
-    } catch (e) { d.aiErr = true; }
+      if (d.reqId !== id) return;
+      d.ai = Object.assign({}, res, d.ai && d.ai.gemini ? { gemini: d.ai.gemini } : {}); scheduleDraft();
+    } catch (e) { if (d.reqId === id) d.aiErr = true; }
+    if (d.reqId !== id) return;
     d.aiBusy = false; syncRow(key);
+  }
+  async function runGemini(key, dataUrl, id) {
+    const d = getD(key), it = rows[key] && rows[key].it;
+    d.gemBusy = true; d.gemErr = false; syncRow(key);
+    try {
+      const g = await AI.vision(dataUrl, { section: it ? it.sectionName : '', label: it ? it.label : '' });
+      if (d.reqId !== id) return;
+      if (!g || !g.verdict) throw new Error('empty');
+      d.ai = Object.assign({}, d.ai || {}, { gemini: { verdict: String(g.verdict), confidence: Number(g.confidence) || 0, reason: String(g.reason || '') } });
+      scheduleDraft();
+    } catch (e) { if (d.reqId !== id) return; d.gemErr = true; }
+    d.gemBusy = false; syncRow(key);
   }
 
   // ---------- 기본 정보 / 버튼 ----------
@@ -986,6 +1019,7 @@
         if (v && !S.aiOn) { S.aiOn = true; if (S.user) { showPhotoBtns(); } }
       }).catch(() => {});
     } catch (e) { /* 무시 */ }
+    setTimeout(() => { try { if (geminiOn() && S.user) showPhotoBtns(); } catch (e) { /* 무시 */ } }, 1500);
 
     let u = null;
     try { u = await DB.currentUser(); } catch (e) { /* 무시 */ }

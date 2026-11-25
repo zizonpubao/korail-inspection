@@ -64,7 +64,7 @@
     return { top: top, prob: best, probs: probs };
   }
 
-  async function post(url, body) {
+  async function post(url, body, raw) {
     if (location.protocol === 'file:') throw new Error('file:// 에서는 AI 보고서를 쓸 수 없습니다');
     var token = await window.DB.accessToken();
     if (!token) throw new Error('로그인 필요');
@@ -80,6 +80,7 @@
       var data = null;
       try { data = await res.json(); } catch (e) { /* 본문 없음 */ }
       if (!res.ok) throw new Error((data && data.error) || ('요청 실패 (' + res.status + ')'));
+      if (raw) return data;
       if (!data || typeof data.text !== 'string' || !data.text) throw new Error('빈 응답');
       return data.text;
     } catch (e) {
@@ -104,5 +105,23 @@
     return post('/api/report?mode=trend', { mode: 'trend', stats: stats, period: period });
   }
 
-  window.AI = { tmAvailable: tmAvailable, classify: classify, report: report, trend: trend };
+  function vision(dataUrl, item) {
+    return post('/api/report', { mode: 'vision', image: dataUrl, item: item }, true).then(function (d) {
+      var r = d && d.result;
+      if (!r || typeof r.verdict !== 'string') throw new Error('빈 응답');
+      return { verdict: r.verdict, confidence: r.confidence, reason: r.reason };
+    });
+  }
+
+  function brief(payload) {
+    return post('/api/report', Object.assign({}, payload, { mode: 'brief' }));
+  }
+
+  function serverAvailable() {
+    var p = location.protocol, h = location.hostname;
+    return (p === 'http:' || p === 'https:') && h !== 'localhost' && h !== '127.0.0.1';
+  }
+
+  window.AI = { tmAvailable: tmAvailable, classify: classify, report: report, trend: trend,
+    vision: vision, brief: brief, serverAvailable: serverAvailable };
 })();

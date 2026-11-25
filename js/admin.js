@@ -6,7 +6,7 @@
   var COLOR = { blue: '#005BAC', blueLight: 'rgba(0,91,172,0.22)', imm: '#C62828', today: '#E08600', next: '#77777A', grid: '#EEF1F5', text: '#1B1F24' };
   var URG_LABEL = { immediate: '즉시 조치', today: '금일 내', next: '다음 정비 시' };
 
-  var S = { root: null, ctx: null, token: 0, charts: [], filters: { days: 30, vehicle: '' }, busy: false, modal: null, body: null, status: null, btns: [] };
+  var S = { root: null, ctx: null, token: 0, charts: [], filters: { days: 30, vehicle: '' }, busy: false, modal: null, body: null, status: null, btns: [], brief: { state: 'idle', text: '', time: '', stale: false }, briefPanel: null, payload: null };
 
   // ---------- 작은 도우미 ----------
   function el(tag, cls, text) {
@@ -279,7 +279,7 @@
       b.setAttribute('aria-pressed', S.filters.days === o[0] ? 'true' : 'false');
       b.addEventListener('click', function () {
         if (S.filters.days === o[0]) return;
-        S.filters.days = o[0];
+        S.filters.days = o[0]; markStale();
         segBtns.forEach(function (x) { x.setAttribute('aria-pressed', x === b ? 'true' : 'false'); });
         draw();
       });
@@ -287,7 +287,7 @@
     });
     pf.appendChild(segs); fs.appendChild(pf);
     var vopts = [['', '전체']].concat(window.ITEMS.vehicles.map(function (v) { return [v, v]; }));
-    fs.appendChild(field('차종', select(vopts, S.filters.vehicle, function (v) { S.filters.vehicle = v; draw(); })));
+    fs.appendChild(field('차종', select(vopts, S.filters.vehicle, function (v) { S.filters.vehicle = v; markStale(); draw(); })));
     bar.appendChild(fs);
     var acts = el('div', 'adm-acts');
     var g = el('button', 'btn sm', '예시 이력 생성'); g.type = 'button'; g.addEventListener('click', genDemo);
@@ -454,13 +454,82 @@
     return tiles;
   }
 
+
+  // ---------- AI 브리핑 ----------
+  function fkey() { return S.filters.days + '|' + S.filters.vehicle; }
+  function markStale() { if (S.brief.state === 'done') S.brief.stale = true; }
+  function briefOk() {
+    return typeof AI !== 'undefined' && AI && typeof AI.serverAvailable === 'function' && typeof AI.brief === 'function' &&
+      AI.serverAvailable() && window.DB && DB.mode === 'supabase';
+  }
+  function buildPayload(a, prev, info) {
+    var rate = function (x) { return x.judged ? Math.round(x.defects / x.judged * 1000) / 10 : 0; };
+    var to = new Date(), from = '';
+    if (info.days) from = ymd(addDays(to, -(info.days - 1)));
+    else info.recs.forEach(function (r) { var d = String(r.inspected_on); if (!from || d < from) from = d; });
+    return {
+      period: { label: info.days ? '최근 ' + info.days + '일' : '전체 기간', from: from, to: ymd(to) },
+      kpis: {
+        inspections: a.n, defects: a.defects, defectRate: rate(a), urgent: a.immediate, urgentTrains: Object.keys(a.trainsImm).length,
+        prev: prev ? { inspections: prev.n, defects: prev.defects, defectRate: rate(prev), urgent: prev.immediate, urgentTrains: Object.keys(prev.trainsImm).length } : null
+      },
+      topDefects: a.repeatList.slice(0, 10).map(function (x) { return { label: x.label, section: x.section, count: x.n }; }),
+      trains: a.trainList.slice(0, 15).map(function (x) { return { trainNo: x.train, vehicle: x.vehicle, defects: x.def, lastUrgent: hasImmediate(x.lastRec) }; })
+    };
+  }
+  function paintBrief() {
+    var p = S.briefPanel; if (!p) return;
+    var ph = p.querySelector('.adm-ph'), box = p.querySelector('.adm-brief-body'), b = S.brief;
+    var old = ph.querySelector('button'); if (old) ph.removeChild(old);
+    box.textContent = '';
+    if (!briefOk()) { box.appendChild(el('p', 'adm-brief-note', '배포 주소에서 로그인하면 AI 브리핑을 쓸 수 있습니다.')); return; }
+    var btn;
+    if (b.state === 'loading') { btn = el('button', 'btn sm', '분석 중…'); btn.disabled = true; }
+    else {
+      btn = el('button', 'btn sm', b.state === 'error' ? '다시 시도' : (b.state === 'done' ? '다시 생성' : '브리핑 생성'));
+      btn.addEventListener('click', runBrief);
+    }
+    btn.type = 'button'; ph.appendChild(btn);
+    if (b.state === 'loading') box.appendChild(el('p', 'adm-brief-note', '분석 중…'));
+    else if (b.state === 'error') box.appendChild(el('p', 'adm-brief-err', '브리핑을 받지 못했습니다. 잠시 후 다시 시도하세요.'));
+    else if (b.state === 'done') {
+      if (b.stale) box.appendChild(el('p', 'adm-brief-note', '필터가 바뀌었습니다. 다시 생성하세요'));
+      box.appendChild(el('p', 'adm-brief-text' + (b.stale ? ' stale' : ''), b.text));
+      box.appendChild(el('p', 'adm-brief-foot', 'AI 요약은 참고용이며 원인은 추정입니다 · 생성 시각 ' + b.time));
+    } else box.appendChild(el('p', 'adm-brief-note', '현재 기간·차종 기준 현황을 요약합니다.'));
+  }
+  function briefPanel() {
+    var p = panel('AI 브리핑 (Gemini)', true);
+    p.className += ' adm-brief';
+    var box = el('div', 'adm-brief-body'); box.setAttribute('aria-live', 'polite');
+    p.appendChild(box);
+    S.briefPanel = p; paintBrief();
+    return p;
+  }
+  async function runBrief() {
+    if (S.brief.state === 'loading' || !S.payload) return;
+    var key = fkey(), payload = S.payload;
+    S.brief.state = 'loading'; S.brief.stale = false; paintBrief();
+    var text = '', ok = true;
+    try { text = await AI.brief(payload); if (!text || !String(text).trim()) ok = false; } catch (e) { ok = false; }
+    if (!S.root) return;
+    if (ok) {
+      var n = new Date();
+      S.brief = { state: 'done', text: String(text).trim(), time: pad(n.getHours()) + ':' + pad(n.getMinutes()), stale: key !== fkey() };
+    } else S.brief.state = 'error';
+    paintBrief();
+  }
+
   function renderBody(a, prev, info) {
     S.body.textContent = '';
     if (!a.n) {
+      S.briefPanel = null; S.payload = null;
       S.body.appendChild(el('div', 'empty', "기록이 없습니다. '예시 이력 생성'으로 시연 데이터를 만들 수 있습니다."));
       return;
     }
     S.body.appendChild(buildTiles(a, prev, info));
+    S.payload = buildPayload(a, prev, info);
+    S.body.appendChild(briefPanel());
 
     var grid = el('div', 'adm-grid');
     S.body.appendChild(grid);
@@ -570,7 +639,7 @@
   window.Admin = {
     render: async function (rootEl, ctx) {
       S.root = rootEl; S.ctx = ctx || {};
-      S.busy = false;
+      S.busy = false; S.brief = { state: 'idle', text: '', time: '', stale: false };
       build();
       await draw();
     },
