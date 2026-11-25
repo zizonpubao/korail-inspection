@@ -380,6 +380,16 @@ table.grid td.num { text-align: right; font-variant-numeric: tabular-nums; }
 /* 불량 위치 도식 */
 .dg-panel { background: #fff; border: 1px solid var(--line); padding: 10px 12px; margin: 12px 0; }
 .dg-panel > summary { cursor: pointer; font-weight: 600; min-height: 32px; display: flex; align-items: center; }
+/* 점검 화면의 접이식 불량 위치: 본문 폭에 맞추고 펼침 표시 */
+.dg-wrap { padding-bottom: 0; }
+.dg-wrap:has(> .dg-panel[hidden]) { display: none; }
+.dg-wrap .dg-panel { margin: 0; padding: 0; border-left: 3px solid var(--blue, #005BAC); }
+.dg-wrap .dg-panel > summary { list-style: none; padding: 10px 14px; color: var(--blue, #005BAC); font-size: 15px; justify-content: space-between; }
+.dg-wrap .dg-panel > summary::-webkit-details-marker { display: none; }
+.dg-wrap .dg-panel > summary::after { content: '펼치기 ▾'; font-weight: 400; font-size: 13px; color: var(--gray, #77777A); }
+.dg-wrap .dg-panel[open] > summary::after { content: '접기 ▴'; }
+.dg-wrap .dg-panel[open] > summary { border-bottom: 1px solid var(--line); }
+.dg-wrap #ck-diagram-body { padding: 10px 14px 12px; }
 .dg-panel .sub-title { margin: 0 0 6px; }
 .dg-svg { display: block; width: 100%; height: auto; max-width: 100%; }
 .dg-note { margin: 4px 0 0; font-size: 12px; color: var(--gray); }

@@ -106,7 +106,9 @@ npx vercel --prod
 
 | 이름 | 필수 | 용도 |
 |---|---|---|
-| `GEMINI_API_KEY` | 필수 (비밀) | Gemini API 호출 |
+| `ANTHROPIC_API_KEY` | 권장 (비밀) | 있으면 Claude(claude-opus-5-5)로 사진 판정·보고서·브리핑 |
+| `GEMINI_API_KEY` | 선택 (비밀) | ANTHROPIC_API_KEY가 없을 때 Gemini 사용 |
+| `GMAIL_USER` / `GMAIL_APP_PASSWORD` | 메일 발송 시 (비밀) | 점검일지 PDF를 로그인 계정 이메일로 발송 |
 | `GEMINI_MODEL` | 선택 | 모델 이름. 없으면 `gemini-2.5-flash` |
 | `SUPABASE_URL` | Supabase 사용 시 | 토큰 검증 대상 주소. `NEXT_PUBLIC_SUPABASE_URL`도 읽는다 |
 | `SUPABASE_ANON_KEY` | Supabase 사용 시 | 토큰 검증용 공개 키. `SUPABASE_PUBLISHABLE_KEY`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`도 읽는다 |

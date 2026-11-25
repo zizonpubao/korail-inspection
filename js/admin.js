@@ -499,7 +499,7 @@
     } else box.appendChild(el('p', 'adm-brief-note', '현재 기간·차종 기준 현황을 요약합니다.'));
   }
   function briefPanel() {
-    var p = panel('AI 브리핑 (Gemini)', true);
+    var p = panel('AI 브리핑 (Claude)', true);
     p.className += ' adm-brief';
     var box = el('div', 'adm-brief-body'); box.setAttribute('aria-live', 'polite');
     p.appendChild(box);

@@ -80,7 +80,7 @@
     if (!a) return '';
     const p = [];
     if (a.top) p.push((a.gemini ? 'TM ' : '') + a.top + ' ' + Math.round(a.prob * 100) + '%');
-    if (a.gemini && a.gemini.verdict) p.push('Gemini ' + gemText(a.gemini));
+    if (a.gemini && a.gemini.verdict) p.push('Claude ' + gemText(a.gemini));
     return p.join(' / ');
   };
   const geminiOn = () => typeof AI !== 'undefined' && typeof AI.vision === 'function' && typeof AI.serverAvailable === 'function' && AI.serverAvailable() && typeof DB !== 'undefined' && DB.mode === 'supabase';
@@ -315,11 +315,11 @@
         box.append(h('div', { class: 'ai-bar' }, h('span', { text: name }), h('div', { class: 'ai-track' }, fill), h('span', { text: pct + '%' })));
       });
     }
-    if (d.gemBusy) box.append(h('p', { class: 'gem-line gem-wait', text: 'Gemini 분석 중…' }));
+    if (d.gemBusy) box.append(h('p', { class: 'gem-line gem-wait', text: 'Claude 분석 중…' }));
     else if (gem) {
       const cls = String(gem.verdict).includes('의심') ? 'gem-bad' : gem.verdict === '정상' ? 'gem-ok' : 'gem-na';
-      box.append(h('p', { class: 'gem-line' }, h('span', { class: 'gem-v ' + cls, text: 'Gemini: ' + gemText(gem) }), h('span', { text: gem.reason ? ' · ' + gem.reason : '' })));
-    } else if (d.gemErr) box.append(h('p', { class: 'gem-line gem-na gem-err', text: 'Gemini 판단을 받지 못했습니다' + (typeof d.gemErr === 'string' ? ' (' + d.gemErr + ')' : '') }));
+      box.append(h('p', { class: 'gem-line' }, h('span', { class: 'gem-v ' + cls, text: 'Claude: ' + gemText(gem) }), h('span', { text: gem.reason ? ' · ' + gem.reason : '' })));
+    } else if (d.gemErr) box.append(h('p', { class: 'gem-line gem-na gem-err', text: 'Claude 판단을 받지 못했습니다' + (typeof d.gemErr === 'string' ? ' (' + d.gemErr + ')' : '') }));
     box.append(h('p', { class: 'ai-note', text: 'AI 판정은 참고용이며 최종 판정은 점검자가 합니다' }));
     const sus = (d.ai && d.ai.top && String(d.ai.top).includes('의심')) || (gem && String(gem.verdict).includes('의심'));
     if (sus && d.status !== 'defect') {
