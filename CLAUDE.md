@@ -33,7 +33,7 @@
 - 공문서와 결재 서식 톤으로 만든다. 1px 선과 표 위주로, 그라데이션·이모지·큰 그림자는 쓰지 않는다.
 - 색상: Korail Blue `#005BAC`, Light Blue `#00B2E3`(포인트로만), Gray `#77777A`
 - 폰트: Pretendard
-- 로고는 넣지 않는다.
+- 로고는 사용자가 준 `assets/korail-logo.webp`만 쓴다. 헤더, 로그인 카드, 점검일지 상단에만 작게 넣는다. (사용자 요청으로 변경)
 
 ## 실행
 - 로컬 (Gemini 제외): `index.html`을 브라우저로 열거나 `npx serve .`

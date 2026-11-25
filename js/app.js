@@ -484,6 +484,7 @@
     photos = photos || {};
     const R = rec.results, s = R.summary;
     const root = h('div', { class: 'journal' });
+    root.append(h('img', { class: 'j-logo', src: 'assets/korail-logo.webp', alt: '한국철도공사', width: '82', height: '20' }));
     root.append(h('h1', { text: '고속차량 점검일지' }), h('p', { class: 'j-sub', text: '(시연용 예시)' }));
     root.append(h('table', null, h('tbody', null,
       h('tr', null, h('th', { text: '점검일자' }), h('td', { text: rec.inspected_on }), h('th', { text: '점검 종류' }), h('td', { text: rec.inspection_type })),
@@ -540,6 +541,7 @@
         const journal = buildJournal(rec, photos);
         stage = h('div', { class: 'pdf-stage' }, journal);
         document.body.append(stage);
+        try { await Promise.all([...stage.querySelectorAll('img')].map((im) => im.decode())); } catch (e) { /* 무시 */ }
         await html2pdf().set({
           margin: [10, 10, 10, 10], filename: name, image: { type: 'jpeg', quality: 0.95 },
           html2canvas: { scale: 2, useCORS: true, backgroundColor: '#ffffff' },

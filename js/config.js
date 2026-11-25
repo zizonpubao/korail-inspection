@@ -3,5 +3,5 @@
 window.APP_CONFIG = {
   SUPABASE_URL: '',
   SUPABASE_ANON_KEY: '',
-  TM_MODEL_URL: ''
+  TM_MODEL_URL: 'https://teachablemachine.withgoogle.com/models/vwtqCSwMl/'
 };
