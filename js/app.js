@@ -471,7 +471,7 @@
       if (!g || !g.verdict) throw new Error('empty');
       d.ai = Object.assign({}, d.ai || {}, { gemini: { verdict: String(g.verdict), confidence: Number(g.confidence) || 0, reason: String(g.reason || '') } });
       scheduleDraft();
-    } catch (e) { if (d.reqId !== id) return; d.gemErr = (e && e.message) ? String(e.message).slice(0, 60) : true; }
+    } catch (e) { if (d.reqId !== id) return; d.gemErr = (e && e.message) ? String(e.message).slice(0, 160) : true; }
     d.gemBusy = false; syncRow(key);
   }
 

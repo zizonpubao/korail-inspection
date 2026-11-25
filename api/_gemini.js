@@ -104,7 +104,14 @@ async function generate(mode, body) {
       }),
       signal: ctrl.signal
     });
-    if (!res.ok) throw mkErr('Gemini HTTP ' + res.status, 'UPSTREAM');
+    if (!res.ok) {
+      // 원인 파악용: Gemini 오류 메시지만 짧게 전달 (키·요청 본문은 포함하지 않음)
+      let msg = '';
+      try { const ej = await res.json(); msg = (ej && ej.error && (ej.error.status || ej.error.message)) || ''; } catch (_) {}
+      const e = mkErr('Gemini HTTP ' + res.status, 'UPSTREAM');
+      e.detail = ('HTTP ' + res.status + ' ' + model + ' ' + String(msg)).slice(0, 160);
+      throw e;
+    }
     const json = await res.json();
     const parts = json && json.candidates && json.candidates[0] &&
       json.candidates[0].content && json.candidates[0].content.parts;
@@ -127,7 +134,9 @@ async function generate(mode, body) {
   } catch (e) {
     if (e && e.code) throw e;
     if (e && e.name === 'AbortError') throw mkErr('Gemini 시간 초과', 'TIMEOUT');
-    throw mkErr('Gemini 호출 실패', 'UPSTREAM');
+    const e2 = mkErr('Gemini 호출 실패', 'UPSTREAM');
+    e2.detail = String((e && e.message) || 'fetch failed').slice(0, 120);
+    throw e2;
   } finally {
     clearTimeout(timer);
   }

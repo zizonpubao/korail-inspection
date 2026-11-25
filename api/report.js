@@ -90,6 +90,6 @@ module.exports = async (req, res) => {
     const code = err && err.code;
     if (code === 'TIMEOUT') return send(res, 504, { error: 'timeout' });
     if (code === 'NO_KEY') return send(res, 500, { error: 'gemini_not_configured' });
-    return send(res, 502, { error: 'upstream' });
+    return send(res, 502, { error: 'upstream' + (err && err.detail ? ': ' + err.detail : (err && err.message ? ': ' + err.message : '')) });
   }
 };
