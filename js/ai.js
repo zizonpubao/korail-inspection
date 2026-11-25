@@ -106,7 +106,7 @@
   }
 
   function vision(dataUrl, item) {
-    return post('/api/report', { mode: 'vision', image: dataUrl, item: item }, true).then(function (d) {
+    return post('/api/report', { mode: 'vision', image: dataUrl, item: item }, true, 30000).then(function (d) {
       var r = d && d.result;
       if (!r || typeof r.verdict !== 'string') throw new Error('빈 응답');
       return { verdict: r.verdict, confidence: r.confidence, reason: r.reason };

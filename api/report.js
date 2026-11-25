@@ -1,5 +1,6 @@
 // Vercel 함수: Supabase 토큰 검증 후 Gemini 호출 위임
-const { generate } = require('./_gemini.js');
+// ANTHROPIC_API_KEY가 있으면 Claude, 없으면 Gemini를 쓴다
+const { generate } = process.env.ANTHROPIC_API_KEY ? require('./_claude.js') : require('./_gemini.js');
 
 function send(res, code, obj) {
   res.statusCode = code;

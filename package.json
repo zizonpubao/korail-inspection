@@ -1,1 +1,8 @@
-{ "name": "korail-inspection", "private": true, "dependencies": { "nodemailer": "6.9.16" } }
+{
+  "name": "korail-inspection",
+  "private": true,
+  "dependencies": {
+    "nodemailer": "6.9.16",
+    "@anthropic-ai/sdk": "1.14.0"
+  }
+}

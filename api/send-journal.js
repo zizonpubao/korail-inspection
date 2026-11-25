@@ -87,7 +87,9 @@ module.exports = async (req, res) => {
       attachments: [{ filename, content: Buffer.from(b64, 'base64'), contentType: 'application/pdf' }]
     });
   } catch (e) {
-    return send(res, 502, { error: 'send_failed' });
+    // 원인 파악용: SMTP 오류 코드만 전달 (비밀번호는 포함되지 않음)
+    const why = [e && e.code, e && e.responseCode, e && e.command].filter(Boolean).join(' ');
+    return send(res, 502, { error: 'send_failed' + (why ? ': ' + String(why).slice(0, 80) : '') });
   }
   return send(res, 200, { ok: true, to: mask(to) });
 };

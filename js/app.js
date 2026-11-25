@@ -736,7 +736,7 @@
       if (!el) toast('메일로 보냈습니다' + (to ? ' (' + to + ')' : ''));
       return true;
     } catch (e) {
-      const msg = e && e.message === 'nolib' ? 'PDF 라이브러리를 불러오지 못해 발송하지 못했습니다' : '발송 실패';
+      const msg = e && e.message === 'nolib' ? 'PDF 라이브러리를 불러오지 못해 발송하지 못했습니다' : ('발송 실패' + (e && e.message ? ' (' + String(e.message).slice(0, 100) + ')' : ''));
       show('bad', msg);
       if (!el) toast(msg, 'error');
       if (retryBtn) retryBtn.hidden = false;
