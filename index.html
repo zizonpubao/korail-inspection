@@ -20,7 +20,7 @@
       <a href="#admin" id="nav-admin" class="hd-tab">정비 현황</a>
     </nav>
     <div class="hd-user">
-      <span id="hd-name" class="hd-name"></span>
+      <button type="button" id="hd-name" class="hd-name" aria-label="내 정보"></button>
       <button type="button" id="btn-logout" class="btn sm">로그아웃</button>
     </div>
   </div>
@@ -63,14 +63,19 @@
           <button type="button" class="tab" id="tab-signup" role="tab">회원가입</button>
         </div>
         <form id="form-remote" class="form">
+          <label class="field"><span>아이디</span>
+            <input id="lr-email" type="text" autocomplete="username" placeholder="예: hejeje" maxlength="60" autocapitalize="none" spellcheck="false" required>
+            <small class="hint" id="lr-id-hint">기존 이메일 계정은 이메일로 로그인</small>
+          </label>
           <label class="field" id="lr-name-wrap" hidden><span>이름(점검자명)</span>
             <input id="lr-name" type="text" autocomplete="name" maxlength="30">
           </label>
-          <label class="field"><span>이메일</span>
-            <input id="lr-email" type="email" autocomplete="email" required>
-          </label>
           <label class="field"><span>비밀번호</span>
             <input id="lr-pw" type="password" autocomplete="current-password" minlength="6" required>
+          </label>
+          <label class="field" id="lr-mail-wrap" hidden><span>점검일지 받을 이메일 (선택)</span>
+            <input id="lr-mail" type="email" autocomplete="email" maxlength="120" placeholder="name@example.com">
+            <small class="hint">점검 완료 시 PDF를 이 주소로 보냅니다</small>
           </label>
           <p class="form-error" id="lr-error" role="alert"></p>
           <button type="submit" class="btn primary block" id="lr-submit">로그인</button>
@@ -161,6 +166,7 @@
       <div class="save-row">
         <span class="save-k">메일 발송</span>
         <span id="res-mail" class="res-state"></span>
+        <button type="button" class="btn sm" id="btn-set-mail" hidden>설정</button>
         <button type="button" class="btn sm primary" id="btn-retry-mail" hidden>다시 보내기</button>
       </div>
 

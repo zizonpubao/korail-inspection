@@ -746,6 +746,55 @@
       return String(uri).replace(/^data:[^,]*,/, '');
     } finally { if (stage) stage.remove(); }
   }
+  const mailTo = () => (S.user && S.user.mailTo) || '';
+  // 내 정보 모달: 아이디, 이름, 점검일지 받을 이메일
+  async function openProfile() {
+    if (!S.user) return;
+    const u = S.user;
+    const mail = h('input', { type: 'email', maxlength: '120', placeholder: 'name@example.com', autocomplete: 'email' });
+    mail.value = u.mailTo || '';
+    const err = h('p', { class: 'form-error', role: 'alert' });
+    const ro = (v) => { const i = h('input', { type: 'text', readonly: 'readonly' }); i.value = v || ''; return i; };
+    const body = h('div', { class: 'mi-form' },
+      h('label', { class: 'field' }, h('span', { text: '아이디' }), ro(u.loginId || u.email)),
+      h('label', { class: 'field' }, h('span', { text: '이름' }), ro(u.name)),
+      h('label', { class: 'field' }, h('span', { text: '점검일지 받을 이메일' }), mail,
+        h('small', { class: 'hint', text: '점검 완료 시 PDF를 이 주소로 보냅니다' })),
+      err);
+    const saveBtn = h('button', { type: 'button', class: 'btn primary', text: '저장' });
+    const cancelBtn = h('button', { type: 'button', class: 'btn', text: '닫기' });
+    const prev = document.activeElement;
+    const ov = h('div', { class: 'modal-overlay' },
+      h('div', { class: 'modal', role: 'dialog', 'aria-modal': 'true', 'aria-label': '내 정보' },
+        h('h2', { text: '내 정보' }), h('div', { class: 'modal-body' }, body),
+        h('div', { class: 'modal-actions' }, [cancelBtn, saveBtn])));
+    const close = () => { ov.remove(); document.removeEventListener('keydown', onKey); if (prev && prev.focus) prev.focus(); };
+    const onKey = (e) => { if (e.key === 'Escape') close(); };
+    cancelBtn.onclick = close;
+    saveBtn.onclick = async () => {
+      err.textContent = ''; saveBtn.disabled = true;
+      try {
+        const v = await DB.setMailTo(mail.value);
+        S.user.mailTo = v || null;
+        toast(v ? '받을 이메일을 저장했습니다' : '받을 이메일을 지웠습니다');
+        refreshMailRow();
+        close();
+      } catch (ex) { err.textContent = ex.message || '저장하지 못했습니다.'; saveBtn.disabled = false; }
+    };
+    $('#modal-root').append(ov);
+    document.addEventListener('keydown', onKey);
+    mail.focus();
+  }
+  // 결과 화면 메일 행: 받는 주소가 없을 때 안내 + 설정 버튼
+  function refreshMailRow() {
+    const el = $('#res-mail'), sb = $('#btn-set-mail'), rb = $('#btn-retry-mail');
+    if (!S.last || !mailAvailable()) return;
+    if (!mailTo()) {
+      setState(el, 'bad', '받을 이메일이 설정되지 않았습니다'); sb.hidden = false; rb.hidden = true;
+    } else if (!sb.hidden) {
+      setState(el, '', '이메일을 설정했습니다. 다시 보내기를 누르세요'); sb.hidden = true; rb.hidden = false;
+    }
+  }
   const mailAvailable = () => typeof DB !== 'undefined' && DB.mode === 'supabase' && typeof AI !== 'undefined' && typeof AI.serverAvailable === 'function' && AI.serverAvailable() && typeof AI.sendJournal === 'function';
   const PDF_MAX_B64 = 4 * 1024 * 1024;
   async function sendJournalMail(rec, photos) {
@@ -780,6 +829,8 @@
   function sendResultMail(aiP) {
     const L = S.last, el = $('#res-mail'), btn = $('#btn-retry-mail');
     if (!mailAvailable()) { setState(el, '', '배포 주소에서 로그인하면 자동 발송됩니다'); btn.hidden = true; return Promise.resolve(); }
+    $('#btn-set-mail').hidden = true;
+    if (!mailTo()) { setState(el, 'bad', '받을 이메일이 설정되지 않았습니다'); $('#btn-set-mail').hidden = false; btn.hidden = true; return Promise.resolve(); }
     setState(el, '', '발송 중…');
     const wait = aiP ? Promise.race([aiP, new Promise((r) => setTimeout(r, 5000))]) : Promise.resolve();
     return wait.then(() => mailJournal(L.rec, L.photos, el, btn));
@@ -839,7 +890,7 @@
     setState($('#res-pdf'), '', '대기');
     setState($('#res-save'), '', '대기 중...');
     setState($('#res-mail'), '', '대기');
-    $('#btn-retry-mail').hidden = true;
+    $('#btn-retry-mail').hidden = true; $('#btn-set-mail').hidden = true;
   }
   async function runCompletion() {
     const L = S.last, rec = L.rec;
@@ -1061,19 +1112,19 @@
       const setMode = (su) => {
         signupMode = su;
         $('#tab-signin').classList.toggle('is-on', !su); $('#tab-signup').classList.toggle('is-on', su);
-        $('#lr-name-wrap').hidden = !su; $('#lr-submit').textContent = su ? '회원가입' : '로그인';
+        $('#lr-name-wrap').hidden = !su; $('#lr-mail-wrap').hidden = !su; $('#lr-id-hint').hidden = su; $('#lr-submit').textContent = su ? '회원가입' : '로그인';
         $('#lr-pw').setAttribute('autocomplete', su ? 'new-password' : 'current-password');
         $('#lr-error').textContent = '';
       };
       $('#tab-signin').onclick = () => setMode(false); $('#tab-signup').onclick = () => setMode(true);
       $('#form-remote').onsubmit = async (e) => {
         e.preventDefault();
-        const email = $('#lr-email').value.trim(), pw = $('#lr-pw').value, name = $('#lr-name').value.trim();
+        const email = $('#lr-email').value.trim(), mail = $('#lr-mail').value.trim(), pw = $('#lr-pw').value, name = $('#lr-name').value.trim();
         const err = $('#lr-error'); err.textContent = '';
         if (signupMode && !name) { err.textContent = '이름(점검자명)을 입력하세요.'; return; }
         const btn = $('#lr-submit'); btn.disabled = true;
         try {
-          if (signupMode) await DB.signUp(email, pw, name); else await DB.signIn(email, pw);
+          if (signupMode) await DB.signUp(email, pw, name, mail); else await DB.signIn(email, pw);
           await afterLogin();
         } catch (ex) { err.textContent = ex.message || '로그인에 실패했습니다.'; }
         btn.disabled = false;
@@ -1083,7 +1134,7 @@
   async function afterLogin() {
     S.user = await DB.currentUser();
     if (!S.user) { route(); return; }
-    $('#hd-name').textContent = (S.user.name || S.user.email || '') + ' 점검자';
+    $('#hd-name').textContent = (S.user.name || S.user.loginId || S.user.email || '') + ' 점검자';
     S.info = { date: todayStr(), trainNo: '', vehicle: IT.vehicles[0], type: IT.types[0] };
     S.data = {};
     await restoreDraft();
@@ -1097,7 +1148,7 @@
     try { await DB.signOut(); } catch (e) { /* 무시 */ }
     S.user = null; S.data = {}; S.last = null;
     S.info = { date: todayStr(), trainNo: '', vehicle: IT.vehicles[0], type: IT.types[0] };
-    $('#ll-name').value = ''; $('#lr-pw').value = '';
+    $('#ll-name').value = ''; $('#lr-pw').value = ''; $('#lr-mail').value = '';
     route();
   }
 
@@ -1137,6 +1188,8 @@
       } catch (e) { setState($('#res-pdf'), 'bad', '실패: ' + e.message); }
     }));
     $('#btn-retry-save').addEventListener('click', async () => { await saveServer(); await tryAiReport(); });
+    $('#hd-name').addEventListener('click', openProfile);
+    $('#btn-set-mail').addEventListener('click', openProfile);
     $('#btn-retry-mail').addEventListener('click', () => S.last && withBusy($('#btn-retry-mail'), '발송 중', () => mailJournal(S.last.rec, S.last.photos, $('#res-mail'), $('#btn-retry-mail'))));
     $('#d-mail').addEventListener('click', () => curDetail && withBusy($('#d-mail'), '발송 중', () => mailJournal(curDetail.rec, curDetail.photos, null, null)));
     $('#btn-trend').addEventListener('click', () => withBusy($('#btn-trend'), '분석 중', runTrend));

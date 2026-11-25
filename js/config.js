@@ -3,5 +3,6 @@
 window.APP_CONFIG = {
   SUPABASE_URL: 'https://amqzwfdlvqpedltoelnb.supabase.co',
   SUPABASE_ANON_KEY: 'sb_publishable_yxd3A0nUVuXyCyz1lGFI1A_RQYWo-mP', // Publishable key (공개용)
+  LOGIN_ID_DOMAIN: 'korail-inspect.local', // 아이디 로그인용 내부 도메인 (실제 메일 아님)
   TM_MODEL_URL: ''
 };

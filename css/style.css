@@ -71,7 +71,7 @@ textarea { resize: vertical; min-height: 64px; }
 .hd-tab:hover { color: var(--blue); }
 .hd-tab.is-on { color: var(--blue); font-weight: 600; border-bottom-color: var(--blue); }
 .hd-user { flex: none; white-space: nowrap; display: flex; align-items: center; gap: 8px; }
-.hd-name { font-size: 13px; font-weight: 500; padding: 3px 10px; border: 1px solid var(--line); border-radius: 10px; color: var(--sub); white-space: nowrap; }
+.hd-name { font-family: inherit; background: none; cursor: pointer; font-size: 13px; font-weight: 500; padding: 3px 10px; border: 1px solid var(--line); border-radius: 10px; color: var(--sub); white-space: nowrap; }
 .hd-user .btn.sm { min-height: 32px; padding: 0 10px; font-size: 13px; color: var(--sub); border-color: var(--line); }
 .hd-user .btn.sm:hover { color: var(--blue); border-color: var(--blue); }
 
@@ -301,7 +301,7 @@ table.grid td.num { text-align: right; font-variant-numeric: tabular-nums; }
   .hd-title { flex: 1; min-width: 0; font-size: 14px; padding-left: 10px; }
   .hd-user { order: 2; }
   .hd-user .btn.sm { min-height: 36px; }
-  .hd-name { display: none; }
+  .hd-name { max-width: 96px; overflow: hidden; text-overflow: ellipsis; padding: 3px 8px; }
   .hd-nav { order: 3; width: 100%; gap: 0; }
   .hd-tab { flex: 1; justify-content: center; padding: 0 6px; white-space: nowrap; }
   .st-inner { padding: 6px 12px; }
@@ -422,3 +422,9 @@ button.dg-row:hover { background: var(--tint); }
 .journal .j-ai { word-break: break-all; overflow-wrap: anywhere; }
 /* PDF: 도식·범례가 페이지 경계에서 잘리지 않게 */
 .journal .j-diagram, .journal .j-diagram img, .journal .dg-legend { page-break-inside: avoid; break-inside: avoid; }
+
+.hint { font-size: 12px; color: var(--sub); }
+.hd-name:hover { color: var(--blue); border-color: var(--blue); }
+.mi-form { display: flex; flex-direction: column; gap: 12px; }
+.mi-form input[readonly] { background: #f3f4f6; }
+.save-row .btn + .btn { margin-left: 6px; }

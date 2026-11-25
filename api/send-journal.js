@@ -49,14 +49,31 @@ module.exports = async (req, res) => {
   } catch (e) {
     return send(res, 502, { error: 'upstream' });
   }
-  const to = user && typeof user.email === 'string' ? user.email : '';
-  if (!to || !/^[^\s@]+@[^\s@]+$/.test(to)) return send(res, 400, { error: 'no_email' });
+  const authEmail = user && typeof user.email === 'string' ? user.email : '';
+  const okMail = (a) => typeof a === 'string' && a.length <= 254 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(a);
+
+  // 수신자: 프로필의 mail_to 우선, 없으면 실제 가입 이메일
+  let to = '';
+  try {
+    if (user && user.id) {
+      const pr = await fetch(url.replace(/\/+$/, '') + '/rest/v1/profiles?id=eq.' + encodeURIComponent(user.id) + '&select=mail_to', {
+        headers: { apikey: anon, Authorization: 'Bearer ' + m[1] }
+      });
+      if (pr.ok) {
+        const rows = await pr.json();
+        const mt = rows && rows[0] && typeof rows[0].mail_to === 'string' ? rows[0].mail_to.trim() : '';
+        if (okMail(mt)) to = mt;
+      }
+    }
+  } catch (e) { /* 조회 실패 시 아래 대체 경로 */ }
+  if (!to && okMail(authEmail) && !/@korail-inspect\.local$/i.test(authEmail)) to = authEmail;
+  if (!to) return send(res, 400, { error: 'no_mail_to' });
 
   const gUser = env.GMAIL_USER;
   const gPass = String(env.GMAIL_APP_PASSWORD || '').replace(/\s+/g, '');
   if (!gUser || !gPass) return send(res, 500, { error: 'mail_not_configured' });
 
-  if (limited(String(user.id || to))) return send(res, 429, { error: 'too_many_requests' });
+  if (limited(String(user.id || authEmail || to))) return send(res, 429, { error: 'too_many_requests' });
 
   let body = req.body;
   if (typeof body === 'string') {

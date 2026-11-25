@@ -66,3 +66,7 @@ drop policy if exists "photos update own" on storage.objects;
 create policy "photos update own" on storage.objects for update to authenticated
   using (bucket_id = 'inspection-photos' and (storage.foldername(name))[1] = auth.uid()::text)
   with check (bucket_id = 'inspection-photos' and (storage.foldername(name))[1] = auth.uid()::text);
+
+-- 6) 추가: 점검일지 받을 이메일
+--    이미 위 1~5를 실행했다면 이 블록만 SQL Editor에서 따로 실행하세요.
+alter table public.profiles add column if not exists mail_to text;

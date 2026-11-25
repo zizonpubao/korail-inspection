@@ -67,6 +67,14 @@
     SUMMARY_COLS.forEach(function (c) { o[c] = r[c] === undefined ? null : r[c]; });
     return o;
   }
+  var MAIL_RE = /^[^s@]+@[^s@]+.[^s@]+$/;
+  // 점검일지 수신 이메일 검증 (빈 값은 null)
+  function normMail(v) {
+    v = String(v || '').trim();
+    if (!v) return null;
+    if (v.length > 120 || !MAIL_RE.test(v)) throw new Error('이메일 형식이 올바르지 않습니다');
+    return v;
+  }
   function photoPrefix(id) { return 'photo.' + id + '.'; }
 
   // ---------- local 구현 ----------
@@ -75,9 +83,15 @@
     signIn: function () { return Promise.reject(new Error('로컬 모드에서는 로그인을 사용하지 않습니다')); },
     signUp: function () { return Promise.reject(new Error('로컬 모드에서는 로그인을 사용하지 않습니다')); },
     signOut: function () { lsDel('localName'); return Promise.resolve(); },
+    setMailTo: function (email) {
+      var v;
+      try { v = normMail(email); } catch (e) { return Promise.reject(e); }
+      try { lsSet('mailTo', v || ''); } catch (e) { return Promise.reject(storageError(e)); }
+      return Promise.resolve(v);
+    },
     currentUser: function () {
       var name = lsGet('localName');
-      return Promise.resolve(name ? { id: 'local', name: name, email: null } : null);
+      return Promise.resolve(name ? { id: 'local', name: name, email: null, loginId: null, mailTo: lsGet('mailTo') || null } : null);
     },
     setLocalName: function (name) {
       try { lsSet('localName', String(name || '').trim()); } catch (e) { return Promise.reject(storageError(e)); }
@@ -210,6 +224,18 @@
     return new Error(msg);
   }
 
+  var LOGIN_DOMAIN = cfg.LOGIN_ID_DOMAIN || 'korail-inspect.local';
+  // 아이디 -> 내부 이메일. '@'가 있으면 기존 이메일 계정으로 보고 그대로 쓴다
+  function toLoginEmail(idOrEmail) {
+    var v = String(idOrEmail || '').replace(/\s+/g, '').toLowerCase();
+    if (v.indexOf('@') >= 0) return v;
+    if (!/^[a-z0-9_.-]{3,30}$/.test(v)) throw new Error('아이디는 영문·숫자 3~30자로 입력하세요');
+    return v + '@' + LOGIN_DOMAIN;
+  }
+  function toLoginId(email) {
+    var e = String(email || ''), suf = '@' + LOGIN_DOMAIN;
+    return e.slice(-suf.length) === suf ? e.slice(0, -suf.length) : e;
+  }
   function getSession() {
     return sb.auth.getSession().then(function (r) { return r.data && r.data.session; });
   }
@@ -219,21 +245,27 @@
       sb = window.supabase.createClient(cfg.SUPABASE_URL, cfg.SUPABASE_ANON_KEY);
       return getSession().then(function () { });
     },
-    signIn: function (email, pw) {
-      return sb.auth.signInWithPassword({ email: email, password: pw }).then(function (r) {
+    signIn: function (idOrEmail, pw) {
+      return Promise.resolve().then(function () {
+        return sb.auth.signInWithPassword({ email: toLoginEmail(idOrEmail), password: pw });
+      }).then(function (r) {
         if (r.error) throw new Error(r.error.message);
         return remote.currentUser();
       });
     },
-    signUp: function (email, pw, name) {
-      return sb.auth.signUp({ email: email, password: pw }).then(function (r) {
+    signUp: function (idOrEmail, pw, name, mailTo) {
+      var email, mail;
+      return Promise.resolve().then(function () {
+        email = toLoginEmail(idOrEmail); mail = normMail(mailTo);
+        return sb.auth.signUp({ email: email, password: pw });
+      }).then(function (r) {
         if (r.error) throw new Error(r.error.message);
         var user = r.data && r.data.user;
         if (!user) throw new Error('가입에 실패했습니다.');
         if (!r.data.session) throw new Error('이메일 확인이 켜져 있습니다. Supabase에서 Confirm email을 끄세요.');
-        return sb.from('profiles').insert({ id: user.id, name: name }).then(function (p) {
+        return sb.from('profiles').insert({ id: user.id, name: name, mail_to: mail }).then(function (p) {
           if (p.error) throw new Error(p.error.message);
-          return { id: user.id, name: name, email: email };
+          return { id: user.id, name: name, email: email, loginId: toLoginId(email), mailTo: mail };
         });
       });
     },
@@ -243,13 +275,26 @@
     currentUser: function () {
       return getSession().then(function (s) {
         if (!s) return null;
-        return sb.from('profiles').select('name').eq('id', s.user.id).maybeSingle().then(function (p) {
+        return sb.from('profiles').select('name,mail_to').eq('id', s.user.id).maybeSingle().then(function (p) {
           var name = (p.data && p.data.name) || (s.user.email || '').split('@')[0];
-          return { id: s.user.id, name: name, email: s.user.email };
+          return { id: s.user.id, name: name, email: s.user.email, loginId: toLoginId(s.user.email),
+            mailTo: (p.data && p.data.mail_to) || null };
         });
       });
     },
     setLocalName: function () { return Promise.reject(new Error('로컬 모드 전용 함수입니다.')); },
+    setMailTo: function (email) {
+      return Promise.resolve().then(function () {
+        var v = normMail(email);
+        return requireUser().then(function (user) {
+          return sb.from('profiles').update({ mail_to: v }).eq('id', user.id).select('id').then(function (r) {
+            if (r.error) throw fail(r.error, '이메일을 저장하지 못했습니다.');
+            if (!r.data || !r.data.length) throw new Error('프로필을 찾을 수 없어 저장하지 못했습니다.');
+            return v;
+          });
+        });
+      });
+    },
     saveInspection: function (record) {
       return requireUser().then(function (user) {
         var rec = Object.assign({}, record);
@@ -362,6 +407,8 @@
     signOut: impl.signOut,
     currentUser: impl.currentUser,
     setLocalName: impl.setLocalName,
+    setMailTo: impl.setMailTo,
+    toLoginEmail: useSupabase ? toLoginEmail : function (v) { return String(v || '').trim(); },
     newId: newId,
     saveInspection: impl.saveInspection,
     updateInspection: impl.updateInspection,
