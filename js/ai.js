@@ -64,12 +64,12 @@
     return { top: top, prob: best, probs: probs };
   }
 
-  async function post(url, body, raw) {
+  async function post(url, body, raw, timeoutMs) {
     if (location.protocol === 'file:') throw new Error('file:// 에서는 AI 보고서를 쓸 수 없습니다');
     var token = await window.DB.accessToken();
     if (!token) throw new Error('로그인 필요');
     var ctrl = new AbortController();
-    var timer = setTimeout(function () { ctrl.abort(); }, TIMEOUT_MS);
+    var timer = setTimeout(function () { ctrl.abort(); }, timeoutMs || TIMEOUT_MS);
     try {
       var res = await fetch(url, {
         method: 'POST',
@@ -117,11 +117,20 @@
     return post('/api/report', Object.assign({}, payload, { mode: 'brief' }));
   }
 
+  function sendJournal(p) {
+    return post('/api/send-journal', {
+      filename: p.filename, pdfBase64: p.pdfBase64, subject: p.subject, summary: p.summary
+    }, true, 30000).then(function (d) {
+      if (!d || !d.ok) throw new Error('발송 실패');
+      return { ok: true, to: d.to };
+    });
+  }
+
   function serverAvailable() {
     var p = location.protocol, h = location.hostname;
     return (p === 'http:' || p === 'https:') && h !== 'localhost' && h !== '127.0.0.1';
   }
 
   window.AI = { tmAvailable: tmAvailable, classify: classify, report: report, trend: trend,
-    vision: vision, brief: brief, serverAvailable: serverAvailable };
+    vision: vision, brief: brief, sendJournal: sendJournal, serverAvailable: serverAvailable };
 })();

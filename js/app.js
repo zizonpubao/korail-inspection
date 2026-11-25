@@ -662,6 +662,62 @@
     printJournal(rec, photos);
     return 'print';
   }
+  async function makePdfBase64(rec, photos) {
+    if (!window.html2pdf) throw new Error('nolib');
+    let stage;
+    try {
+      try { await document.fonts.load('12px Pretendard'); await document.fonts.ready; } catch (e) { /* 무시 */ }
+      const journal = buildJournal(rec, photos);
+      stage = h('div', { class: 'pdf-stage' }, journal);
+      document.body.append(stage);
+      try { await Promise.all([...stage.querySelectorAll('img')].map((im) => im.decode())); } catch (e) { /* 무시 */ }
+      const uri = await html2pdf().set({
+        margin: [10, 10, 10, 10], image: { type: 'jpeg', quality: 0.95 },
+        html2canvas: { scale: 2, useCORS: true, backgroundColor: '#ffffff' },
+        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+        pagebreak: { mode: ['css', 'legacy'], avoid: ['tr', '.sign'] }
+      }).from(journal).outputPdf('datauristring');
+      return String(uri).replace(/^data:[^,]*,/, '');
+    } finally { if (stage) stage.remove(); }
+  }
+  const mailAvailable = () => typeof DB !== 'undefined' && DB.mode === 'supabase' && typeof AI !== 'undefined' && typeof AI.serverAvailable === 'function' && AI.serverAvailable() && typeof AI.sendJournal === 'function';
+  const PDF_MAX_B64 = 4 * 1024 * 1024;
+  async function sendJournalMail(rec, photos) {
+    let b64 = await makePdfBase64(rec, photos);
+    if (b64.length > PDF_MAX_B64 && photos && Object.keys(photos).length) b64 = await makePdfBase64(rec, {});
+    if (b64.length > PDF_MAX_B64) throw new Error('PDF가 너무 큽니다');
+    const s = rec.results.summary;
+    const subject = '[점검일지] ' + rec.inspected_on + ' ' + rec.vehicle_type + ' ' + (rec.train_no || '-') + ' ' + rec.inspection_type + ' (불량 ' + s.defect + '건, 즉시 ' + s.urgent + '건)';
+    const info = ['점검일자: ' + rec.inspected_on, '차종: ' + rec.vehicle_type + ' ' + (rec.train_no || '-'), '점검 종류: ' + rec.inspection_type, '점검자: ' + rec.inspector_name];
+    const summary = info.join('\n') + '\n\n' + (rec.ai_report ? String(rec.ai_report) : actionText(rec));
+    return AI.sendJournal({ filename: fileBase(rec) + '.pdf', pdfBase64: b64, subject, summary });
+  }
+  // 메일 발송 + 상태 표시. el이 없으면 토스트로 알림
+  async function mailJournal(rec, photos, el, retryBtn) {
+    const show = (cls, msg) => { if (el) setState(el, cls, msg); };
+    if (retryBtn) retryBtn.hidden = true;
+    show('', '발송 중…');
+    try {
+      const r = await sendJournalMail(rec, photos);
+      const to = r && r.to ? r.to : '';
+      show('ok', '발송 완료' + (to ? ' (' + to + ')' : ''));
+      if (!el) toast('메일로 보냈습니다' + (to ? ' (' + to + ')' : ''));
+      return true;
+    } catch (e) {
+      const msg = e && e.message === 'nolib' ? 'PDF 라이브러리를 불러오지 못해 발송하지 못했습니다' : '발송 실패';
+      show('bad', msg);
+      if (!el) toast(msg, 'error');
+      if (retryBtn) retryBtn.hidden = false;
+      return false;
+    }
+  }
+  function sendResultMail(aiP) {
+    const L = S.last, el = $('#res-mail'), btn = $('#btn-retry-mail');
+    if (!mailAvailable()) { setState(el, '', '배포 주소에서 로그인하면 자동 발송됩니다'); btn.hidden = true; return Promise.resolve(); }
+    setState(el, '', '발송 중…');
+    const wait = aiP ? Promise.race([aiP, new Promise((r) => setTimeout(r, 5000))]) : Promise.resolve();
+    return wait.then(() => mailJournal(L.rec, L.photos, el, btn));
+  }
   function printJournal(rec, photos) {
     const area = $('#print-area'); area.textContent = ''; area.append(buildJournal(rec, photos));
     document.body.classList.add('print-mode');
@@ -715,11 +771,14 @@
     setState($('#res-xlsx'), '', '대기');
     setState($('#res-pdf'), '', '대기');
     setState($('#res-save'), '', '대기 중...');
+    setState($('#res-mail'), '', '대기');
+    $('#btn-retry-mail').hidden = true;
   }
   async function runCompletion() {
     const L = S.last, rec = L.rec;
     await saveServer();
-    await tryAiReport();
+    const aiP = tryAiReport();
+    await Promise.all([aiP, sendResultMail(aiP)]);
     clearTimeout(draftTimer);
     try { await DB.clearDraft(); } catch (e) { /* 무시 */ }
     // 완료 레코드는 S.last에 보관하고 입력 상태는 새 점검으로 비움
@@ -858,7 +917,7 @@
   let curDetail = null;
   async function showDetail(id) {
     const body = $('#d-body'); body.textContent = ''; curDetail = null;
-    $('#d-del').hidden = true;
+    $('#d-del').hidden = true; $('#d-mail').hidden = true;
     body.append(h('div', { class: 'empty', text: '불러오는 중...' }));
     let rec;
     try { rec = await DB.getInspection(id); } catch (e) { rec = null; }
@@ -874,6 +933,7 @@
     if (rec.ai_report) { /* 일지 안에 포함 */ }
     const me = S.user && S.user.id;
     $('#d-del').hidden = !(me && rec.user_id === me);
+    $('#d-mail').hidden = !mailAvailable();
   }
   async function deleteDetail() {
     if (!curDetail) return;
@@ -1006,6 +1066,8 @@
       } catch (e) { setState($('#res-pdf'), 'bad', '실패: ' + e.message); }
     }));
     $('#btn-retry-save').addEventListener('click', async () => { await saveServer(); await tryAiReport(); });
+    $('#btn-retry-mail').addEventListener('click', () => S.last && withBusy($('#btn-retry-mail'), '발송 중', () => mailJournal(S.last.rec, S.last.photos, $('#res-mail'), $('#btn-retry-mail'))));
+    $('#d-mail').addEventListener('click', () => curDetail && withBusy($('#d-mail'), '발송 중', () => mailJournal(curDetail.rec, curDetail.photos, null, null)));
     $('#btn-trend').addEventListener('click', () => withBusy($('#btn-trend'), '분석 중', runTrend));
     $('#d-xlsx').addEventListener('click', () => curDetail && exportExcel(curDetail.rec));
     $('#d-pdf').addEventListener('click', () => curDetail && withBusy($('#d-pdf'), '생성 중', () => exportPdf(curDetail.rec, curDetail.photos)));

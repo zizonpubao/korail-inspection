@@ -154,6 +154,12 @@
         <button type="button" class="btn sm primary" id="btn-retry-save" hidden>다시 시도</button>
       </div>
 
+      <div class="save-row">
+        <span class="save-k">메일 발송</span>
+        <span id="res-mail" class="res-state"></span>
+        <button type="button" class="btn sm primary" id="btn-retry-mail" hidden>다시 보내기</button>
+      </div>
+
       <h2 class="sub-title">조치 요청 문구 <span id="res-ai-tag" class="tag" hidden>AI 작성</span></h2>
       <pre id="res-text" class="action-text"></pre>
       <div class="actions left">
@@ -193,6 +199,7 @@
         <div class="detail-acts">
           <button type="button" class="btn" id="d-xlsx">엑셀 받기</button>
           <button type="button" class="btn" id="d-pdf">PDF 받기</button>
+          <button type="button" class="btn" id="d-mail" hidden>메일로 다시 보내기</button>
           <button type="button" class="btn danger" id="d-del" hidden>삭제</button>
         </div>
       </div>

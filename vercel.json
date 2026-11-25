@@ -1,1 +1,1 @@
-{ "functions": { "api/report.js": { "maxDuration": 30 } } }
+{ "functions": { "api/report.js": { "maxDuration": 30 }, "api/send-journal.js": { "maxDuration": 30 } } }
