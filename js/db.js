@@ -127,6 +127,22 @@
       });
       return Promise.resolve(out.map(summarize));
     },
+    listInspectionsFull: function (f) {
+      f = f || {};
+      var list = readJson('inspections', []);
+      if (!Array.isArray(list)) list = [];
+      var out = list.filter(function (r) {
+        if (!r) return false;
+        if (f.from && String(r.inspected_on || '') < f.from) return false;
+        if (f.vehicle && r.vehicle_type !== f.vehicle) return false;
+        return true;
+      });
+      out.sort(function (a, b) {
+        return String(b.inspected_on || '').localeCompare(String(a.inspected_on || '')) ||
+          String(b.created_at || '').localeCompare(String(a.created_at || ''));
+      });
+      return Promise.resolve(out);
+    },
     getInspection: function (id) {
       var list = readJson('inspections', []);
       for (var i = 0; i < list.length; i++) if (list[i] && list[i].id === id) return Promise.resolve(list[i]);
@@ -266,6 +282,19 @@
         return r.data || [];
       });
     },
+    listInspectionsFull: function (f) {
+      f = f || {};
+      var q = sb.from('inspections').select('*')
+        .order('inspected_on', { ascending: false })
+        .order('created_at', { ascending: false })
+        .limit(1000);
+      if (f.from) q = q.gte('inspected_on', f.from);
+      if (f.vehicle) q = q.eq('vehicle_type', f.vehicle);
+      return q.then(function (r) {
+        if (r.error) throw fail(r.error, '정비 현황을 불러오지 못했습니다.');
+        return r.data || [];
+      });
+    },
     getInspection: function (id) {
       return sb.from('inspections').select('*').eq('id', id).maybeSingle().then(function (r) {
         if (r.error) throw fail(r.error, '점검 기록을 불러오지 못했습니다.');
@@ -337,6 +366,7 @@
     saveInspection: impl.saveInspection,
     updateInspection: impl.updateInspection,
     listInspections: impl.listInspections,
+    listInspectionsFull: impl.listInspectionsFull,
     getInspection: impl.getInspection,
     deleteInspection: impl.deleteInspection,
     uploadPhoto: impl.uploadPhoto,

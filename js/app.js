@@ -601,21 +601,12 @@
     $('#res-text').textContent = actionText(L.rec);
     $('#res-ai-tag').hidden = true;
     $('#btn-retry-save').hidden = true;
-    setState($('#res-xlsx'), '', '생성 중...');
-    setState($('#res-pdf'), '', '대기 중...');
+    setState($('#res-xlsx'), '', '대기');
+    setState($('#res-pdf'), '', '대기');
     setState($('#res-save'), '', '대기 중...');
   }
   async function runCompletion() {
     const L = S.last, rec = L.rec;
-    try {
-      const r = exportExcel(rec);
-      setState($('#res-xlsx'), r === 'xlsx' ? 'ok' : 'warn', r === 'xlsx' ? '다운로드 완료 (.xlsx)' : 'CSV로 대신 저장했습니다 (엑셀 라이브러리 불러오기 실패)');
-    } catch (e) { setState($('#res-xlsx'), 'bad', '생성 실패: ' + e.message); }
-    setState($('#res-pdf'), '', '생성 중...');
-    try {
-      const r = await exportPdf(rec, L.photos);
-      setState($('#res-pdf'), r === 'pdf' ? 'ok' : 'warn', r === 'pdf' ? '다운로드 완료 (.pdf)' : '인쇄 창으로 대신 열었습니다 (PDF 라이브러리 불러오기 실패)');
-    } catch (e) { setState($('#res-pdf'), 'bad', '생성 실패: ' + e.message); }
     await saveServer();
     await tryAiReport();
     clearTimeout(draftTimer);
@@ -784,10 +775,18 @@
 
   // ---------- 라우팅 ----------
   function showView(name) {
-    ['login', 'inspect', 'result', 'history', 'detail'].forEach((v) => { $('#view-' + v).hidden = v !== name; });
+    ['login', 'inspect', 'result', 'history', 'detail', 'admin'].forEach((v) => { $('#view-' + v).hidden = v !== name; });
     $('#nav-inspect').classList.toggle('is-on', name === 'inspect' || name === 'result');
     $('#nav-history').classList.toggle('is-on', name === 'history' || name === 'detail');
+    $('#nav-admin').classList.toggle('is-on', name === 'admin');
     window.scrollTo(0, 0);
+  }
+  async function showAdmin() {
+    const root = document.getElementById('admin-root');
+    try {
+      if (!window.Admin) throw new Error('no admin');
+      await window.Admin.render(root, { user: S.user, openDetail: (id) => { location.hash = '#detail/' + encodeURIComponent(id); } });
+    } catch (e) { console.warn(e); root.textContent = '정비 현황을 불러오지 못했습니다'; }
   }
   function route() {
     if (!S.user) { $('#app-header').hidden = true; showView('login'); return; }
@@ -795,7 +794,9 @@
     const hash = location.hash.slice(1) || 'inspect';
     const i = hash.indexOf('/');
     const name = i < 0 ? hash : hash.slice(0, i), arg = i < 0 ? '' : decodeURIComponent(hash.slice(i + 1));
-    if (name === 'history') { showView('history'); setupHistoryFilters(); loadHistory(); }
+    try { if (window.Admin && window.Admin.destroy) window.Admin.destroy(); } catch (e) { /* 무시 */ }
+    if (name === 'admin') { showView('admin'); showAdmin(); }
+    else if (name === 'history') { showView('history'); setupHistoryFilters(); loadHistory(); }
     else if (name === 'detail' && arg) { showView('detail'); showDetail(arg); }
     else if (name === 'result' && S.last) { showView('result'); }
     else { if (name !== 'inspect') { history.replaceState(null, '', '#inspect'); } showView('inspect'); }
@@ -877,8 +878,20 @@
       try { await DB.clearDraft(); } catch (e) { /* 무시 */ }
       fillInfoForm(); renderChecklist(); location.hash = '#inspect';
     });
-    $('#btn-redo-xlsx').addEventListener('click', () => S.last && withBusy($('#btn-redo-xlsx'), '생성 중', async () => { exportExcel(S.last.rec); }));
-    $('#btn-redo-pdf').addEventListener('click', () => S.last && withBusy($('#btn-redo-pdf'), '생성 중', () => exportPdf(S.last.rec, S.last.photos)));
+    $('#btn-redo-xlsx').addEventListener('click', () => S.last && withBusy($('#btn-redo-xlsx'), '생성 중', async () => {
+      setState($('#res-xlsx'), '', '생성 중...');
+      try {
+        const r = exportExcel(S.last.rec);
+        setState($('#res-xlsx'), r === 'xlsx' ? 'ok' : 'warn', r === 'xlsx' ? '다운로드 완료 (.xlsx)' : 'CSV로 대신 저장했습니다 (엑셀 라이브러리 불러오기 실패)');
+      } catch (e) { setState($('#res-xlsx'), 'bad', '실패: ' + e.message); }
+    }));
+    $('#btn-redo-pdf').addEventListener('click', () => S.last && withBusy($('#btn-redo-pdf'), '생성 중', async () => {
+      setState($('#res-pdf'), '', '생성 중...');
+      try {
+        const r = await exportPdf(S.last.rec, S.last.photos);
+        setState($('#res-pdf'), r === 'pdf' ? 'ok' : 'warn', r === 'pdf' ? '다운로드 완료 (.pdf)' : '인쇄 창으로 대신 열었습니다 (PDF 라이브러리 불러오기 실패)');
+      } catch (e) { setState($('#res-pdf'), 'bad', '실패: ' + e.message); }
+    }));
     $('#btn-retry-save').addEventListener('click', async () => { await saveServer(); await tryAiReport(); });
     $('#btn-trend').addEventListener('click', () => withBusy($('#btn-trend'), '분석 중', runTrend));
     $('#d-xlsx').addEventListener('click', () => curDetail && exportExcel(curDetail.rec));

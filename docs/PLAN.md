@@ -58,6 +58,7 @@
 | `DB.saveInspection(record)` | 4장 레코드 저장, `{ id }` 반환 | localStorage 배열 |
 | `DB.updateInspection(id, patch)` | `ai_report` 등 갱신 | 동일 |
 | `DB.listInspections({ vehicle, type, q })` | 목록(요약 열만), 최신순 | 동일 |
+| `DB.listInspectionsFull({ from, vehicle })` | 관리자용 전체 레코드(results 포함), `inspected_on` 내림차순, 최대 1000건 | 동일 |
 | `DB.getInspection(id)` | 전체 레코드 | 동일 |
 | `DB.deleteInspection(id)` | 본인 기록 삭제 (사진 포함) | 동일 |
 | `DB.uploadPhoto(inspectionId, itemKey, blob)` | 경로 반환 `{uid}/{id}/{key}.jpg` | dataURL을 별도 키로 저장, 용량 초과 시 Error |
