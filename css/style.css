@@ -413,3 +413,10 @@ button.dg-row:hover { background: var(--tint); }
 .v3d-canvas { display: block; width: 100%; height: 100%; touch-action: pan-y; cursor: grab; }
 .v3d-label { position: absolute; transform: translate(-50%, -50%); min-width: 22px; height: 22px; line-height: 22px; padding: 0 3px; text-align: center; color: #fff; font-size: 13px; font-weight: 700; border-radius: 11px; border: 1px solid #fff; cursor: pointer; }
 @media (max-width: 600px) { .v3d { height: 220px; } }
+/* PDF 일지: 도식은 작게 가운데, 범례 점 정렬 */
+.journal .j-diagram .dg-svg { max-width: 440px; margin: 0 auto; }
+.journal .j-diagram .dg-legend { font-size: 10.5px; margin-top: 4px; }
+.journal .j-diagram .dg-row { padding: 1px 2px; align-items: center; }
+.journal .j-diagram .dg-dot { margin-top: 0; width: 7px; height: 7px; }
+.journal .j-diagram .dg-note { font-size: 10px; }
+.journal .j-ai { word-break: break-all; overflow-wrap: anywhere; }
