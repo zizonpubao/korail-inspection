@@ -687,7 +687,7 @@
         clone.setAttribute('height', String(vh));
         const url = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(new XMLSerializer().serializeToString(clone));
         const src = new Image();
-        await new Promise((ok, no) => { src.onload = ok; src.onerror = no; src.src = url; });
+        await new Promise((ok, no) => { src.onload = ok; src.onerror = no; setTimeout(() => no(new Error('svg timeout')), 4000); src.src = url; });
         const cv = document.createElement('canvas');
         cv.width = w * 2; cv.height = hgt * 2;
         const ctx = cv.getContext('2d');
@@ -697,7 +697,8 @@
         img.src = cv.toDataURL('image/png');
         img.width = w; img.height = hgt;
         img.style.cssText = 'display:block;margin:0 auto;width:' + w + 'px;height:' + hgt + 'px';
-        await img.decode().catch(() => {});
+        // decode()는 백그라운드 탭에서 멈출 수 있어 시간 제한을 둔다
+        await Promise.race([img.decode().catch(() => {}), new Promise((r) => setTimeout(r, 1500))]);
         svg.replaceWith(img);
       } catch (e) { svg.remove(); }
     }
@@ -712,10 +713,10 @@
         stage = h('div', { class: 'pdf-stage' }, journal);
         document.body.append(stage);
         await svgToImages(stage);
-        try { await Promise.all([...stage.querySelectorAll('img')].map((im) => im.decode())); } catch (e) { /* 무시 */ }
+        try { await Promise.race([Promise.all([...stage.querySelectorAll('img')].map((im) => im.decode())), new Promise((r) => setTimeout(r, 2000))]); } catch (e) { /* 무시 */ }
         await html2pdf().set({
           margin: [10, 10, 10, 10], filename: name, image: { type: 'jpeg', quality: 0.95 },
-          html2canvas: { scale: 2, useCORS: true, backgroundColor: '#ffffff' },
+          html2canvas: { scale: 2, useCORS: true, backgroundColor: '#ffffff', scrollX: 0, scrollY: 0 },
           jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
           pagebreak: { mode: ['css', 'legacy'], avoid: ['tr', '.sign'] }
         }).from(journal).save();
@@ -735,10 +736,10 @@
       stage = h('div', { class: 'pdf-stage' }, journal);
       document.body.append(stage);
       await svgToImages(stage);
-      try { await Promise.all([...stage.querySelectorAll('img')].map((im) => im.decode())); } catch (e) { /* 무시 */ }
+      try { await Promise.race([Promise.all([...stage.querySelectorAll('img')].map((im) => im.decode())), new Promise((r) => setTimeout(r, 2000))]); } catch (e) { /* 무시 */ }
       const uri = await html2pdf().set({
         margin: [10, 10, 10, 10], image: { type: 'jpeg', quality: 0.95 },
-        html2canvas: { scale: 2, useCORS: true, backgroundColor: '#ffffff' },
+        html2canvas: { scale: 2, useCORS: true, backgroundColor: '#ffffff', scrollX: 0, scrollY: 0 },
         jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
         pagebreak: { mode: ['css', 'legacy'], avoid: ['tr', '.sign'] }
       }).from(journal).outputPdf('datauristring');

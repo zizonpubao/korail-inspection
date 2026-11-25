@@ -17,7 +17,7 @@
 - 조치 요청 문구를 규칙 기반으로 만든다. Gemini 보고서가 성공하면 그 내용으로 바꾼다.
 - Supabase 모드에서는 점검 기록과 사진을 서버에 저장하고, 로그인한 팀원이 함께 조회한다.
 - 정비 현황 화면: 지표 5개(직전 기간 대비 증감), 일자별·차종별·분야별·긴급도 차트, 반복 불량 상위 10, 편성별 현황, 최근 즉시조치 목록. 시연용 예시 이력을 만들고 지울 수 있다.
-- 사진 판정 보조(Teachable Machine)와 반복 불량 요약(Gemini)
+- Claude AI 사진 판정 보조, 조치 보고서·반복 불량 요약·정비 현황 브리핑
 
 ## 화면 구성
 
@@ -37,7 +37,6 @@
   - html2pdf.js 0.10.2 (PDF)
   - supabase-js 2.45.4
   - Chart.js 4.4.1 (정비 현황 차트)
-  - TensorFlow.js 1.3.1 + @teachablemachine/image 0.8.5 (사진 판정, 모델 URL이 있을 때만 불러온다)
   - Pretendard 1.3.9 (폰트)
 - 백엔드
   - Supabase: Auth(이메일/비밀번호), Postgres(RLS), 비공개 Storage 버킷 `inspection-photos`
@@ -53,13 +52,12 @@ assets/korail-logo.webp  로고
 css/style.css            화면 스타일, 인쇄 스타일
 css/admin.css            정비 현황 화면 스타일
 docs/PLAN.md             구현 계획
-docs/TM_학습가이드.md     Teachable Machine 모델 학습 가이드
 docs/발표요약.md          발표용 요약
 index.html               화면 골격과 스크립트 로드
 js/admin.js              정비 현황 화면 (지표, 차트, 예시 이력)
-js/ai.js                 Teachable Machine 판정, /api/report 호출
+js/ai.js                 AI 호출(/api/report: 사진 판정·보고서·브리핑, /api/send-journal)
 js/app.js                화면 흐름, 체크리스트, 자동 판정, 엑셀·PDF, 이력
-js/config.js             Supabase 공개 값, Teachable Machine 모델 URL
+js/config.js             Supabase 공개 값
 js/db.js                 저장소 추상화 (localStorage / Supabase)
 js/items.js              점검 항목과 기준치 (데이터만)
 supabase/schema.sql      테이블, RLS, Storage 정책
@@ -124,10 +122,6 @@ npx vercel --prod
 5. 복사한 값을 `js/config.js`의 `SUPABASE_URL`, `SUPABASE_ANON_KEY`에 넣고, Vercel 환경변수 `SUPABASE_URL`, `SUPABASE_ANON_KEY`에도 등록한다.
 
 이미 1~4를 실행한 뒤 사진 덮어쓰기 정책만 추가할 때는 `schema.sql`의 마지막 블록(5번)만 따로 실행한다.
-
-## Teachable Machine 모델 교체
-
-사진 판정 모델은 `js/config.js`의 `TM_MODEL_URL`에 있다. 새 모델을 만들려면 `docs/TM_학습가이드.md`를 따른다. 클래스 이름은 `정상`, `찌그러짐 의심`, `판정불가`로 맞춘다. 내보낸 링크(끝이 `/`로 끝나야 한다)를 `TM_MODEL_URL`에 넣는다. URL을 비우면 사진 판정 영역이 숨겨진다.
 
 ## 보안 설계
 

@@ -3,5 +3,5 @@
 window.APP_CONFIG = {
   SUPABASE_URL: 'https://amqzwfdlvqpedltoelnb.supabase.co',
   SUPABASE_ANON_KEY: 'sb_publishable_yxd3A0nUVuXyCyz1lGFI1A_RQYWo-mP', // Publishable key (공개용)
-  TM_MODEL_URL: 'https://teachablemachine.withgoogle.com/models/vwtqCSwMl/'
+  TM_MODEL_URL: ''
 };

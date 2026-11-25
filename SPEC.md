@@ -109,7 +109,7 @@ vercel.json
 4. **서버 저장**: Supabase에 점검 기록과 사진을 저장한다. 실패해도 엑셀·PDF는 정상 동작하고, "서버 저장 실패, 다시 시도" 버튼을 보여준다.
 
 ### 4.4 AI 기능
-**(A) 사진 판정 보조: Teachable Machine**
+**(A) 사진 판정 보조: Teachable Machine (사용자 요청으로 제외 — 시연 샘플 구분 실패. 사진 판정은 (A-2) Claude로 대체)**
 - 모델 URL은 `config.js`의 `TM_MODEL_URL`에 둔다. Teachable Machine에서 "Upload my model"로 받은 링크를 쓴다.
 - 클래스: `정상` / `찌그러짐 의심` / `판정불가`
   - 시연에서는 물병의 찌그러짐 여부로 차체·부품 변형 판정을 흉내 낸다.
