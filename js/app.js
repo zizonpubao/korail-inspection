@@ -671,6 +671,37 @@
     root.append(h('p', { class: 'j-notice', text: IT.notice }));
     return root;
   }
+  // PDF 캡처(html2canvas)는 인라인 SVG를 잘못 그려 잘리거나 뒤 내용이 빠진다 → 캡처 전에 PNG 이미지로 바꾼다
+  async function svgToImages(root) {
+    const svgs = [...root.querySelectorAll('svg')];
+    for (const svg of svgs) {
+      try {
+        const box = svg.getBoundingClientRect();
+        const vb = (svg.getAttribute('viewBox') || '').split(/\s+/).map(Number);
+        const vw = vb[2] || box.width || 800, vh = vb[3] || box.height || 220;
+        const w = Math.round(box.width || Math.min(440, vw));
+        const hgt = Math.round(w * vh / vw);
+        const clone = svg.cloneNode(true);
+        clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+        clone.setAttribute('width', String(vw));
+        clone.setAttribute('height', String(vh));
+        const url = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(new XMLSerializer().serializeToString(clone));
+        const src = new Image();
+        await new Promise((ok, no) => { src.onload = ok; src.onerror = no; src.src = url; });
+        const cv = document.createElement('canvas');
+        cv.width = w * 2; cv.height = hgt * 2;
+        const ctx = cv.getContext('2d');
+        ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, cv.width, cv.height);
+        ctx.drawImage(src, 0, 0, cv.width, cv.height);
+        const img = new Image();
+        img.src = cv.toDataURL('image/png');
+        img.width = w; img.height = hgt;
+        img.style.cssText = 'display:block;margin:0 auto;width:' + w + 'px;height:' + hgt + 'px';
+        await img.decode().catch(() => {});
+        svg.replaceWith(img);
+      } catch (e) { svg.remove(); }
+    }
+  }
   async function exportPdf(rec, photos) {
     const name = fileBase(rec) + '.pdf';
     if (window.html2pdf) {
@@ -680,6 +711,7 @@
         const journal = buildJournal(rec, photos);
         stage = h('div', { class: 'pdf-stage' }, journal);
         document.body.append(stage);
+        await svgToImages(stage);
         try { await Promise.all([...stage.querySelectorAll('img')].map((im) => im.decode())); } catch (e) { /* 무시 */ }
         await html2pdf().set({
           margin: [10, 10, 10, 10], filename: name, image: { type: 'jpeg', quality: 0.95 },
@@ -702,6 +734,7 @@
       const journal = buildJournal(rec, photos);
       stage = h('div', { class: 'pdf-stage' }, journal);
       document.body.append(stage);
+      await svgToImages(stage);
       try { await Promise.all([...stage.querySelectorAll('img')].map((im) => im.decode())); } catch (e) { /* 무시 */ }
       const uri = await html2pdf().set({
         margin: [10, 10, 10, 10], image: { type: 'jpeg', quality: 0.95 },
