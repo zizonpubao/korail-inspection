@@ -59,3 +59,10 @@ create policy "photos insert own" on storage.objects for insert to authenticated
 drop policy if exists "photos delete own" on storage.objects;
 create policy "photos delete own" on storage.objects for delete to authenticated
   using (bucket_id = 'inspection-photos' and (storage.foldername(name))[1] = auth.uid()::text);
+
+-- 5) 추가: 사진 덮어쓰기(upsert)용 storage update 정책
+--    이미 위 1~4를 실행했다면 이 블록만 SQL Editor에서 따로 실행하세요.
+drop policy if exists "photos update own" on storage.objects;
+create policy "photos update own" on storage.objects for update to authenticated
+  using (bucket_id = 'inspection-photos' and (storage.foldername(name))[1] = auth.uid()::text)
+  with check (bucket_id = 'inspection-photos' and (storage.foldername(name))[1] = auth.uid()::text);

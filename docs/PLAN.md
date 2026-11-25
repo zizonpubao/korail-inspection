@@ -31,7 +31,8 @@
 | `js/app.js` | ui-builder | 화면 전환, 체크리스트 렌더, 자동 판정, 진행률, 임시저장, 엑셀·PDF·조치 문구, 이력 UI | 저장은 `DB.*`만, AI는 `AI.*`만 호출 |
 | `js/db.js` | backend-engineer | 저장소 추상화 (`window.DB`) | 아래 3장 인터페이스 |
 | `js/ai.js` | ai-integrator | TM 판정, `/api/report` 호출 (`window.AI`) | 2단계에서는 ui-builder가 `AI.available()=false`인 스텁을 둔다 |
-| `api/report.js` | backend-engineer(인증 뼈대) + ai-integrator(Gemini 부분) | Vercel 함수 | 함수 안에서 `// --- GEMINI ---` 구역으로 나눠 충돌 방지 |
+| `api/report.js` | backend-engineer | Vercel 함수: 메서드·토큰 검증·상태 코드 | Gemini 호출은 `require('./_gemini.js')`로 위임 |
+| `api/_gemini.js` | ai-integrator | `generate(mode, body) → Promise<string>`, 실패 시 `err.code` = `NO_KEY` / `TIMEOUT` / `UPSTREAM` | `_`로 시작해 라우트로 노출되지 않음. 두 에이전트가 파일을 나눠 동시에 작업 |
 | `vercel.json` | backend-engineer | 함수 설정(최대 실행 시간 등) | — |
 | `supabase/schema.sql` | backend-engineer | 이미 있음. 필요하면 사진 update 정책만 추가 | — |
 
