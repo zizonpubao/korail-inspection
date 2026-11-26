@@ -898,7 +898,9 @@
   }
   function showResult() {
     const L = S.last;
-    $('#res-text').textContent = actionText(L.rec);
+    // AI 보고서를 받을 수 있으면 규칙 문구를 먼저 보여주지 않고 대기 표시 후 AI 결과만 보여준다
+    L.aiPending = aiReportAvailable(L.rec);
+    setActionText(L.aiPending ? null : actionText(L.rec));
     const sm = L.rec.results.summary, okN = L.rec.results.items.filter((i) => i.status === 'ok').length;
     diagPanel($('#res-diagram'), L.rec.results.items, '불량 위치');
     $('#rc-total').textContent = sm.total; $('#rc-ok').textContent = okN; $('#rc-bad').textContent = sm.defect; $('#rc-urg').textContent = sm.urgent;
@@ -948,12 +950,32 @@
       $('#btn-retry-save').hidden = false;
     }
   }
+  // 배포 환경 + 로그인 + 불량 있음일 때만 AI 보고서를 요청한다
+  function aiReportAvailable(rec) {
+    return defectsOf(rec).length > 0 && DB.mode === 'supabase' && typeof AI !== 'undefined' &&
+      typeof AI.report === 'function' && (typeof AI.serverAvailable !== 'function' || AI.serverAvailable());
+  }
+  // text가 null이면 AI 작성 대기 표시
+  function setActionText(text) {
+    const el = $('#res-text'), copy = $('#btn-copy');
+    if (text == null) {
+      el.textContent = 'AI가 조치 요청 보고서를 작성하고 있습니다… (보통 5~20초)';
+      el.classList.add('ai-waiting');
+      if (copy) copy.disabled = true;
+    } else {
+      el.textContent = text;
+      el.classList.remove('ai-waiting');
+      if (copy) copy.disabled = false;
+    }
+  }
   async function tryAiReport() {
     const L = S.last;
     if (!L || L.aiTried) return;
     const rec = L.rec, ds = defectsOf(rec);
     if (!ds.length) return;
     L.aiTried = true;
+    // AI가 실패하면 규칙 기반 문구로 대체
+    const fallback = () => { if (S.last === L && L.aiPending) { L.aiPending = false; setActionText(actionText(rec)); toast('AI 보고서를 받지 못해 기본 조치 문구를 표시합니다', 'warn'); } };
     try {
       const text = await AI.report({
         mode: 'report',
@@ -962,10 +984,10 @@
       });
       if (text && String(text).trim()) {
         rec.ai_report = String(text);
-        if (S.last === L) { $('#res-text').textContent = rec.ai_report; $('#res-ai-tag').hidden = false; }
+        if (S.last === L) { L.aiPending = false; setActionText(rec.ai_report); $('#res-ai-tag').hidden = false; }
         if (L.saved) { try { await DB.updateInspection(rec.id, { ai_report: rec.ai_report }); } catch (e) { /* 무시 */ } }
-      }
-    } catch (e) { /* 규칙 문구 유지 */ }
+      } else fallback();
+    } catch (e) { fallback(); }
   }
   async function copyText(text) {
     try { await navigator.clipboard.writeText(text); toast('복사했습니다'); return; } catch (e) { /* 대체 */ }

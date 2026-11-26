@@ -437,3 +437,6 @@ button.dg-row:hover { background: var(--tint); }
 .ghost-link { border-style: dashed; color: var(--gray, #77777A); }
 @media (max-width: 600px) { .sample-grid { grid-template-columns: 1fr; } }
 .modal:has(.sample-grid) { max-width: 720px; }
+/* AI 보고서 작성 대기 */
+.action-text.ai-waiting { color: var(--gray, #77777A); font-style: normal; animation: aiwait 1.4s ease-in-out infinite; }
+@keyframes aiwait { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }
