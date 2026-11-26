@@ -53,6 +53,23 @@
       btns[opt.focusFirst ? 0 : btns.length - 1].focus();
     });
   }
+  // 시연용 샘플 사진: 받아서 "사진 선택"으로 올리면 AI 판정을 보여줄 수 있다
+  const SAMPLE_PHOTOS = [
+    { src: 'assets/samples/sample1_body_dent.webp', file: '시연사진1_차체측면_찌그러짐.webp', title: '차체 측면 하단 찌그러짐', hint: '차체·안전설비 > 차체·전두부 손상 항목에 첨부' },
+    { src: 'assets/samples/sample2_underfloor_box_dent.webp', file: '시연사진2_하부기기함_함몰.webp', title: '하부 기기함 모서리 함몰', hint: '동력·추진(차종별) 항목에 첨부' }
+  ];
+  function openSamples() {
+    const grid = h('div', { class: 'sample-grid' }, SAMPLE_PHOTOS.map((p) =>
+      h('figure', { class: 'sample-card' },
+        h('img', { src: p.src, alt: p.title, loading: 'lazy' }),
+        h('figcaption', null,
+          h('strong', { text: p.title }),
+          h('span', { class: 'hint', text: p.hint }),
+          h('a', { class: 'btn sm primary', href: p.src, download: p.file, text: '다운로드' })))));
+    const body = h('div', null, grid,
+      h('p', { class: 'hint', text: '시연용 예시 사진입니다. 받은 뒤 불량 항목의 "사진 선택"으로 올리면 AI 판정을 확인할 수 있습니다.' }));
+    return openModal({ title: '시연용 샘플 사진', body, actions: [{ label: '닫기', value: null, kind: 'primary' }] });
+  }
   const confirmModal = (title, msg, ok, danger) => openModal({
     title, body: msg, focusFirst: !!danger,
     actions: [{ label: '취소', value: false }, { label: ok || '확인', value: true, kind: danger ? 'danger' : 'primary' }]
@@ -269,7 +286,8 @@
           r.preview,
           h('label', { class: 'btn sm file-btn' }, '사진 선택',
             h('input', { type: 'file', accept: 'image/*', capture: 'environment', 'aria-label': it.label + ' 사진 첨부', onchange: (e) => onPhoto(it.key, e.target) })),
-          r.rmPhoto),
+          r.rmPhoto,
+          h('button', { type: 'button', class: 'btn sm ghost-link', text: '샘플 사진 받기', onclick: openSamples })),
         r.aiBox));
     r.el.append(r.detail);
     return r.el;
@@ -1164,6 +1182,7 @@
     $('#f-vehicle').addEventListener('change', (e) => changeInfo('vehicle', e.target.value, e.target));
     $('#f-type').addEventListener('change', (e) => changeInfo('type', e.target.value, e.target));
     $('#btn-sample').addEventListener('click', fillSample);
+    if ($('#btn-samples')) $('#btn-samples').addEventListener('click', openSamples);
     $('#btn-reset').addEventListener('click', resetAll);
     $('#btn-complete').addEventListener('click', onComplete);
     $('#btn-logout').addEventListener('click', logout);

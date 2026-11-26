@@ -428,3 +428,12 @@ button.dg-row:hover { background: var(--tint); }
 .mi-form { display: flex; flex-direction: column; gap: 12px; }
 .mi-form input[readonly] { background: #f3f4f6; }
 .save-row .btn + .btn { margin-left: 6px; }
+/* 시연용 샘플 사진 */
+.sample-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 4px 0 10px; }
+.sample-card { margin: 0; border: 1px solid var(--line); background: #fff; }
+.sample-card img { display: block; width: 100%; aspect-ratio: 4 / 3; object-fit: cover; background: #F5F7FA; }
+.sample-card figcaption { display: flex; flex-direction: column; gap: 4px; padding: 8px 10px 10px; font-size: 14px; }
+.sample-card .btn { align-self: flex-start; margin-top: 4px; }
+.ghost-link { border-style: dashed; color: var(--gray, #77777A); }
+@media (max-width: 600px) { .sample-grid { grid-template-columns: 1fr; } }
+.modal:has(.sample-grid) { max-width: 720px; }
